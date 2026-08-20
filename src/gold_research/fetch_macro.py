@@ -71,6 +71,8 @@ def _fetch_from_yahoo(symbol: str, range_: str) -> list[PricePoint]:
         if close is None:
             continue
         points.append(PricePoint(date=_timestamp_to_date(ts), close=float(close)))
+    if not points:
+        raise ValueError(f"{symbol}: Yahoo Finance returned no usable price points")
     return points
 
 
