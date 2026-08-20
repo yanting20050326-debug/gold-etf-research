@@ -58,7 +58,9 @@ def _check_staleness(
 ) -> list[HealthIssue]:
     if not as_of_str:
         return [HealthIssue("error", f"{label} 沒有 as_of 日期")]
-    as_of = datetime.strptime(as_of_str, "%Y-%m-%d").date()
+    as_of = datetime.strptime(
+        as_of_str, "%Y-%m-%d"
+    ).date()  # noqa: DTZ007 -- date-only comparison, no time/tz semantics needed
     age_days = (today - as_of).days
     if age_days > MAX_STALE_DAYS:
         return [
@@ -74,7 +76,9 @@ def main() -> int:
         print(f"找不到 {SITE_DATA_PATH}，請先執行 build_site.py")
         return 1
     payload = json.loads(SITE_DATA_PATH.read_text(encoding="utf-8"))
-    issues = check_payload(payload, date.today())
+    issues = check_payload(
+        payload, date.today()
+    )  # noqa: DTZ011 -- date-only freshness check, no time/tz semantics needed
     errors = [i for i in issues if i.severity == "error"]
     warnings = [i for i in issues if i.severity == "warning"]
     for issue in errors:
