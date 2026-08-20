@@ -110,3 +110,27 @@ def test_render_html_embeds_valid_json():
     end = html.index(";\n", start)
     embedded = json.loads(html[start:end])
     assert embedded["targets"]["00635U"]["code"] == "00635U"
+
+
+def test_render_html_includes_price_charts():
+    bars = _sample_bars()
+    macro_gold = MacroSeries(
+        symbol="GC=F",
+        points=[PricePoint("2026-08-20", 2050.0)],
+        as_of="2026-08-20",
+        stale=False,
+    )
+    macro_fx = MacroSeries(
+        symbol="USDTWD=X",
+        points=[PricePoint("2026-08-20", 31.5)],
+        as_of="2026-08-20",
+        stale=False,
+    )
+    payload = build_payload(
+        bars, macro_gold, macro_fx, datetime(2026, 8, 20, tzinfo=UTC)
+    )
+    html = render_html(payload)
+
+    assert "renderSparkline" in html
+    assert "國際金價" in html
+    assert "USD/TWD" in html

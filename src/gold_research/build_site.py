@@ -137,6 +137,41 @@ function renderDisclaimer() {
   document.getElementById("disclaimer").textContent = SITE_DATA.disclaimer;
 }
 
+function sparklinePath(points, width, height, padding) {
+  if (points.length === 0) return "";
+  const values = points.map((p) => p.close);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const stepX = (width - padding * 2) / Math.max(points.length - 1, 1);
+  return values
+    .map((v, i) => {
+      const x = padding + i * stepX;
+      const y = padding + (height - padding * 2) * (1 - (v - min) / range);
+      return (i === 0 ? "M" : "L") + x.toFixed(1) + "," + y.toFixed(1);
+    })
+    .join(" ");
+}
+
+function renderSparkline(points, color) {
+  const width = 320;
+  const height = 80;
+  const padding = 6;
+  const path = sparklinePath(points, width, height, padding);
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+  svg.setAttribute("width", "100%");
+  svg.setAttribute("height", height);
+  const pathEl = document.createElementNS(svgNS, "path");
+  pathEl.setAttribute("d", path);
+  pathEl.setAttribute("fill", "none");
+  pathEl.setAttribute("stroke", color);
+  pathEl.setAttribute("stroke-width", "2");
+  svg.appendChild(pathEl);
+  return svg;
+}
+
 function renderTarget() {
   const target = SITE_DATA.targets["00635U"];
   const card = document.getElementById("target-card");
@@ -152,6 +187,10 @@ function renderTarget() {
   grid.appendChild(el("div", { className: "indicator", textContent: "布林通道：" + target.indicators.bollinger.lower + " ~ " + target.indicators.bollinger.upper }));
   grid.appendChild(el("div", { className: "indicator", textContent: "MACD：" + target.indicators.macd.macd + " / 訊號線 " + target.indicators.macd.signal }));
   card.appendChild(grid);
+  if (target.chart && target.chart.length > 1) {
+    card.appendChild(el("p", { textContent: "近 " + target.chart.length + " 個交易日走勢：" }));
+    card.appendChild(renderSparkline(target.chart, "#ffcf7a"));
+  }
   card.appendChild(el("p", { className: "source-note", textContent: "資料來源：" + target.data_source.name + "，最後更新 " + target.data_source.as_of }));
 }
 
@@ -163,6 +202,18 @@ function renderMacro() {
   card.appendChild(el("p", { textContent: macro.note }));
   if (macro.stale) {
     card.appendChild(el("p", { className: "source-note", textContent: "⚠ 資料暫時無法取得，顯示上次成功抓取的結果。" }));
+  }
+  const goldPoints = macro.comex_gold_usd;
+  const fxPoints = macro.usdtwd;
+  if (goldPoints.length > 0) {
+    const latestGold = goldPoints[goldPoints.length - 1];
+    card.appendChild(el("p", { textContent: "國際金價（COMEX 黃金期貨）：$" + latestGold.close.toFixed(2) + " 美元（" + latestGold.date + "）" }));
+    if (goldPoints.length > 1) card.appendChild(renderSparkline(goldPoints, "#e0c46c"));
+  }
+  if (fxPoints.length > 0) {
+    const latestFx = fxPoints[fxPoints.length - 1];
+    card.appendChild(el("p", { textContent: "USD/TWD：" + latestFx.close.toFixed(3) + "（" + latestFx.date + "）" }));
+    if (fxPoints.length > 1) card.appendChild(renderSparkline(fxPoints, "#7ab8ff"));
   }
   card.appendChild(el("p", { className: "source-note", textContent: "資料來源：" + macro.data_source.name + "，最後更新 " + macro.data_source.as_of }));
 }
