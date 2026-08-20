@@ -40,15 +40,21 @@ def relative_strength_index(
         change = closes[i] - closes[i - 1]
         gains[i] = max(change, 0.0)
         losses[i] = max(-change, 0.0)
-    for i in range(window, len(closes)):
-        avg_gain = sum(gains[i - window + 1 : i + 1]) / window
-        avg_loss = sum(losses[i - window + 1 : i + 1]) / window
-        if avg_loss == 0:
-            result[i] = 100.0
-        else:
-            rs = avg_gain / avg_loss
-            result[i] = 100 - (100 / (1 + rs))
+    avg_gain = sum(gains[1 : window + 1]) / window
+    avg_loss = sum(losses[1 : window + 1]) / window
+    result[window] = _rsi_from_averages(avg_gain, avg_loss)
+    for i in range(window + 1, len(closes)):
+        avg_gain = (avg_gain * (window - 1) + gains[i]) / window
+        avg_loss = (avg_loss * (window - 1) + losses[i]) / window
+        result[i] = _rsi_from_averages(avg_gain, avg_loss)
     return result
+
+
+def _rsi_from_averages(avg_gain: float, avg_loss: float) -> float:
+    if avg_loss == 0:
+        return 100.0
+    rs = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))
 
 
 def bollinger_bands(

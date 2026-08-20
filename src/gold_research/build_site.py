@@ -112,6 +112,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .badge { display: inline-block; background: #52370f; color: #ffcf7a; padding: 2px 10px; border-radius: 999px; font-size: 12px; margin-left: 8px; }
   .indicator-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-top: 12px; }
   .indicator { background: #12141a; padding: 10px 12px; border-radius: 8px; }
+  .indicator { cursor: pointer; }
+  .indicator-detail { margin-top: 8px; font-size: 13px; color: #c9c9c9; line-height: 1.5; }
+  .tab-bar { margin-bottom: 12px; }
+  .tab-button { background: #1a1d24; color: #e6e6e6; border: 1px solid #333; border-radius: 6px; padding: 6px 14px; margin-right: 8px; cursor: pointer; font-size: 14px; }
+  .tab-button.active { background: #52370f; color: #ffcf7a; border-color: #a97c00; }
   .source-note { color: #9aa0a6; font-size: 12px; margin-top: 8px; }
   .candidate { border-left: 3px solid #52370f; padding-left: 12px; margin-bottom: 12px; }
   a { color: #7ab8ff; }
@@ -120,11 +125,24 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <body>
   <h1>黃金相關研究</h1>
   <div class="disclaimer" id="disclaimer"></div>
+  <div class="tab-bar" id="target-tabs"></div>
   <div class="card" id="target-card"></div>
   <div class="card" id="macro-card"></div>
   <div class="card" id="candidates-card"></div>
 <script>
 const SITE_DATA = __DATA__;
+
+const INDICATOR_EXPLANATIONS = {
+  ma20: "MA20 是近 20 個交易日的平均收盤價，用來看價格的中期趨勢方向。黃金的均線走勢常跟著美元指數、實質利率反向擺動，不是公司獲利成長那種趨勢。",
+  rsi14: "RSI14 衡量近期漲跌力道，超過 70 通常視為短線過熱、低於 30 視為超賣。黃金的 RSI 過熱經常是避險情緒推動（例如地緣政治或股災），不必然代表基本面轉弱，過熱不代表一定要賣。",
+  bollinger: "布林通道用近 20 日的平均價 ± 2 倍標準差，顯示目前價格相對波動區間的位置。黃金的波動區間常因美元走勢、央行政策會議而突然放大或收斂。",
+  macd: "MACD 比較短期與長期均線的差距，搭配訊號線判斷動能轉折。黃金的動能轉折常跟利率預期（例如聯準會會議）同步發生，本身沒有財報或產業循環可以對照。",
+};
+
+function fmt(value, digits) {
+  if (value === null || value === undefined) return "資料不足";
+  return value.toFixed(digits);
+}
 
 function el(tag, props, children) {
   const node = document.createElement(tag);
@@ -172,26 +190,64 @@ function renderSparkline(points, color) {
   return svg;
 }
 
-function renderTarget() {
-  const target = SITE_DATA.targets["00635U"];
+function indicatorCard(key, label, valueText) {
+  const card = el("div", { className: "indicator", tabIndex: 0 });
+  const summary = el("div", { className: "indicator-summary", textContent: label + "：" + valueText });
+  const detail = el("div", { className: "indicator-detail", textContent: INDICATOR_EXPLANATIONS[key] });
+  detail.style.display = "none";
+  card.appendChild(summary);
+  card.appendChild(detail);
+  card.addEventListener("click", () => {
+    detail.style.display = detail.style.display === "none" ? "block" : "none";
+  });
+  return card;
+}
+
+let currentTargetCode = null;
+
+function renderTargetTabs() {
+  const codes = Object.keys(SITE_DATA.targets);
+  const tabBar = document.getElementById("target-tabs");
+  tabBar.innerHTML = "";
+  codes.forEach((code) => {
+    const label = SITE_DATA.targets[code].display_name + "（" + code + "）";
+    const btn = el("button", { className: "tab-button", textContent: label });
+    btn.dataset.code = code;
+    btn.addEventListener("click", () => {
+      renderTarget(code);
+    });
+    tabBar.appendChild(btn);
+  });
+}
+
+function updateTabActiveState() {
+  document.querySelectorAll("#target-tabs .tab-button").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.code === currentTargetCode);
+  });
+}
+
+function renderTarget(code) {
+  currentTargetCode = code;
+  const target = SITE_DATA.targets[code];
   const card = document.getElementById("target-card");
   card.innerHTML = "";
   const heading = el("h2", { textContent: target.display_name + " (" + target.code + ") " });
   heading.appendChild(el("span", { className: "badge", textContent: "商品／避險資產，非股票型ETF" }));
   card.appendChild(heading);
   card.appendChild(el("p", { textContent: target.asset_class_note }));
-  card.appendChild(el("p", { textContent: "最新收盤：" + target.latest.close + "（" + target.latest.trading_date + "）" }));
+  card.appendChild(el("p", { textContent: "最新收盤：" + fmt(target.latest.close, 2) + "（" + target.latest.trading_date + "）" }));
   const grid = el("div", { className: "indicator-grid" });
-  grid.appendChild(el("div", { className: "indicator", textContent: "MA20：" + target.indicators.ma20 }));
-  grid.appendChild(el("div", { className: "indicator", textContent: "RSI14：" + target.indicators.rsi14 }));
-  grid.appendChild(el("div", { className: "indicator", textContent: "布林通道：" + target.indicators.bollinger.lower + " ~ " + target.indicators.bollinger.upper }));
-  grid.appendChild(el("div", { className: "indicator", textContent: "MACD：" + target.indicators.macd.macd + " / 訊號線 " + target.indicators.macd.signal }));
+  grid.appendChild(indicatorCard("ma20", "MA20", fmt(target.indicators.ma20, 2)));
+  grid.appendChild(indicatorCard("rsi14", "RSI14", fmt(target.indicators.rsi14, 2)));
+  grid.appendChild(indicatorCard("bollinger", "布林通道", fmt(target.indicators.bollinger.lower, 2) + " ~ " + fmt(target.indicators.bollinger.upper, 2)));
+  grid.appendChild(indicatorCard("macd", "MACD", fmt(target.indicators.macd.macd, 4) + " / 訊號線 " + fmt(target.indicators.macd.signal, 4)));
   card.appendChild(grid);
   if (target.chart && target.chart.length > 1) {
     card.appendChild(el("p", { textContent: "近 " + target.chart.length + " 個交易日走勢：" }));
     card.appendChild(renderSparkline(target.chart, "#ffcf7a"));
   }
   card.appendChild(el("p", { className: "source-note", textContent: "資料來源：" + target.data_source.name + "，最後更新 " + target.data_source.as_of }));
+  updateTabActiveState();
 }
 
 function renderMacro() {
@@ -200,6 +256,7 @@ function renderMacro() {
   card.innerHTML = "";
   card.appendChild(el("h2", { textContent: "總體背景參考" }));
   card.appendChild(el("p", { textContent: macro.note }));
+  card.appendChild(el("p", { textContent: "背景脈絡：美元走弱、實質利率走低、避險情緒升溫，通常對金價有利；但這只是歷史上常見的關聯性，不是保證，也不是進出場訊號。" }));
   if (macro.stale) {
     card.appendChild(el("p", { className: "source-note", textContent: "⚠ 資料暫時無法取得，顯示上次成功抓取的結果。" }));
   }
@@ -207,12 +264,12 @@ function renderMacro() {
   const fxPoints = macro.usdtwd;
   if (goldPoints.length > 0) {
     const latestGold = goldPoints[goldPoints.length - 1];
-    card.appendChild(el("p", { textContent: "國際金價（COMEX 黃金期貨）：$" + latestGold.close.toFixed(2) + " 美元（" + latestGold.date + "）" }));
+    card.appendChild(el("p", { textContent: "國際金價（COMEX 黃金期貨）：$" + fmt(latestGold.close, 2) + " 美元（" + latestGold.date + "）" }));
     if (goldPoints.length > 1) card.appendChild(renderSparkline(goldPoints, "#e0c46c"));
   }
   if (fxPoints.length > 0) {
     const latestFx = fxPoints[fxPoints.length - 1];
-    card.appendChild(el("p", { textContent: "USD/TWD：" + latestFx.close.toFixed(3) + "（" + latestFx.date + "）" }));
+    card.appendChild(el("p", { textContent: "USD/TWD：" + fmt(latestFx.close, 3) + "（" + latestFx.date + "）" }));
     if (fxPoints.length > 1) card.appendChild(renderSparkline(fxPoints, "#7ab8ff"));
   }
   card.appendChild(el("p", { className: "source-note", textContent: "資料來源：" + macro.data_source.name + "，最後更新 " + macro.data_source.as_of }));
@@ -237,7 +294,8 @@ function renderCandidates() {
 }
 
 renderDisclaimer();
-renderTarget();
+renderTargetTabs();
+renderTarget(Object.keys(SITE_DATA.targets)[0]);
 renderMacro();
 renderCandidates();
 </script>
@@ -259,6 +317,9 @@ def main() -> None:
         prev_month = month - 1 or 12
         prev_year = year if month > 1 else year - 1
         bars = fetch_month("00635U", prev_year, prev_month) + bars
+
+    if not bars:
+        raise RuntimeError("00635U: no TWSE bars fetched for the requested months")
 
     macro_gold = fetch_series("GC=F", DATA_CACHE_DIR / "gc_f.json")
     macro_fx = fetch_series("USDTWD=X", DATA_CACHE_DIR / "usdtwd.json")

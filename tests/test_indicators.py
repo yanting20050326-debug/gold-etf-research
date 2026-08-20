@@ -41,6 +41,18 @@ def test_relative_strength_index_all_losses_is_0():
     assert result[14] == pytest.approx(0.0)
 
 
+def test_relative_strength_index_uses_wilder_smoothing_not_simple_average():
+    # Mixed up/down series; window=5 chosen small enough to hand-verify by hand.
+    closes = [10, 10.5, 10.2, 10.8, 11.0, 10.7, 11.3]
+    result = relative_strength_index(closes, window=5)
+    # Wilder seed at index 5: avg_gain=1.3/5=0.26, avg_loss=0.6/5=0.12
+    assert result[5] == pytest.approx(68.42105263157895)
+    # Wilder step at index 6: avg_gain=(0.26*4+0.6)/5=0.328, avg_loss=(0.12*4+0)/5=0.096
+    assert result[6] == pytest.approx(4100 / 53)
+    # A simple rolling-average (Cutler) RSI would give exactly 70.0 here — Wilder must differ.
+    assert result[6] != pytest.approx(70.0)
+
+
 def test_bollinger_bands_middle_matches_sma_and_upper_gt_lower():
     closes = [10, 12, 11, 13, 15, 14, 16, 18, 17, 19]
     bands = bollinger_bands(closes, window=5, num_std=2.0)

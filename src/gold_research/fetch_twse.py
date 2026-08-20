@@ -41,10 +41,10 @@ def fetch_month(stock_no: str, year: int, month: int) -> list[DailyBar]:
         raise TwseFetchError(f"TWSE STOCK_DAY 回傳 stat={payload.get('stat')!r}")
 
     bars: list[DailyBar] = []
-    for row in payload["data"]:
+    for row in payload.get("data", []):
         try:
             bars.append(_parse_row(row))
-        except (ValueError, IndexError) as exc:
+        except (ValueError, IndexError, TypeError) as exc:
             logger.warning("跳過無法解析的 TWSE 資料列 {}：{}", row, exc)
     return bars
 

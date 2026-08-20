@@ -39,7 +39,13 @@ def fetch_series(symbol: str, cache_path: Path, range_: str = "6mo") -> MacroSer
     """
     try:
         points = _fetch_from_yahoo(symbol, range_)
-    except (requests.RequestException, ValueError, KeyError) as exc:
+    except (
+        requests.RequestException,
+        ValueError,
+        KeyError,
+        TypeError,
+        IndexError,
+    ) as exc:
         logger.warning("{} 即時抓取失敗：{}，改用本地快取", symbol, exc)
         cached = _read_cache(cache_path)
         if cached is None:

@@ -131,6 +131,11 @@ def test_render_html_includes_price_charts():
     )
     html = render_html(payload)
 
-    assert "renderSparkline" in html
-    assert "國際金價" in html
-    assert "USD/TWD" in html
+    # These assert the specific call sites exist, not just that the string
+    # "renderSparkline" appears somewhere in the template — a template
+    # constant containing the word would make this test pass even if the
+    # actual rendering calls were deleted. Asserting the exact call-site
+    # source text is immune to that.
+    assert "renderSparkline(target.chart" in html
+    assert "renderSparkline(goldPoints" in html
+    assert "renderSparkline(fxPoints" in html
