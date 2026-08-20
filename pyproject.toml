@@ -1,0 +1,23 @@
+[project]
+name = "gold-research"
+version = "0.1.0"
+description = "獨立黃金相關標的研究站：00635U 技術面儀表板 + 候選清單"
+requires-python = ">=3.12"
+dependencies = [
+    "requests>=2.32",
+    "loguru>=0.7",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "black>=24.0",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gold_research"]
