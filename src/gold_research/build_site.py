@@ -106,29 +106,57 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <title>黃金相關研究</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
-  body { font-family: -apple-system, "Noto Sans TC", sans-serif; margin: 0; padding: 24px; background: #0f1115; color: #e6e6e6; }
-  .disclaimer { background: #3a2b00; border: 1px solid #a97c00; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; }
-  .card { background: #1a1d24; border-radius: 10px; padding: 16px 20px; margin-bottom: 16px; }
-  .badge { display: inline-block; background: #52370f; color: #ffcf7a; padding: 2px 10px; border-radius: 999px; font-size: 12px; margin-left: 8px; }
+  :root {
+    --bg: #f6f8fb;
+    --card-bg: #ffffff;
+    --stat-bg: #fbfdff;
+    --border: #d9e2ef;
+    --text: #111827;
+    --text-secondary: #334155;
+    --text-muted: #64748b;
+    --accent: #2563eb;
+    --accent-shadow: rgba(37, 99, 235, 0.35);
+    --card-shadow: rgba(15, 23, 42, 0.08);
+    --gold: #b45309;
+    --gold-bg: #fff7e6;
+    --gold-border: #f0c869;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Microsoft JhengHei", "Noto Sans TC", system-ui, sans-serif;
+    margin: 0;
+    padding: 32px 16px 48px;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .shell { max-width: 880px; margin: 0 auto; }
+  h1 { font-size: 32px; font-weight: 700; margin: 0 0 16px; }
+  h2 { font-size: 20px; font-weight: 700; margin: 0 0 8px; }
+  h3 { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
+  .disclaimer { background: var(--gold-bg); border: 1px solid var(--gold-border); color: #7a4a00; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; }
+  .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 18px 50px var(--card-shadow); }
+  .badge { display: inline-block; background: var(--gold-bg); color: var(--gold); border: 1px solid var(--gold-border); padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; margin-left: 8px; vertical-align: middle; }
   .indicator-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-top: 12px; }
-  .indicator { background: #12141a; padding: 10px 12px; border-radius: 8px; }
-  .indicator { cursor: pointer; }
-  .indicator-detail { margin-top: 8px; font-size: 13px; color: #c9c9c9; line-height: 1.5; }
-  .tab-bar { margin-bottom: 12px; }
-  .tab-button { background: #1a1d24; color: #e6e6e6; border: 1px solid #333; border-radius: 6px; padding: 6px 14px; margin-right: 8px; cursor: pointer; font-size: 14px; }
-  .tab-button.active { background: #52370f; color: #ffcf7a; border-color: #a97c00; }
-  .source-note { color: #9aa0a6; font-size: 12px; margin-top: 8px; }
-  .candidate { border-left: 3px solid #52370f; padding-left: 12px; margin-bottom: 12px; }
-  a { color: #7ab8ff; }
+  .indicator { background: var(--stat-bg); border: 1px solid var(--border); padding: 12px 14px; border-radius: 8px; cursor: pointer; }
+  .indicator-summary { font-weight: 700; }
+  .indicator-detail { margin-top: 8px; font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+  .tab-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .tab-button { background: var(--card-bg); color: var(--text-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; cursor: pointer; font-size: 15px; font-weight: 700; font-family: inherit; }
+  .tab-button.active { background: var(--accent); color: #ffffff; border-color: var(--accent); box-shadow: 0 8px 20px var(--accent-shadow); }
+  .source-note { color: var(--text-muted); font-size: 12px; margin-top: 8px; }
+  .candidate { border-left: 3px solid var(--gold-border); padding-left: 14px; margin-bottom: 16px; }
+  a { color: var(--accent); }
 </style>
 </head>
 <body>
+  <div class="shell">
   <h1>黃金相關研究</h1>
   <div class="disclaimer" id="disclaimer"></div>
   <div class="tab-bar" id="target-tabs"></div>
   <div class="card" id="target-card"></div>
   <div class="card" id="macro-card"></div>
   <div class="card" id="candidates-card"></div>
+  </div>
 <script>
 const SITE_DATA = __DATA__;
 
@@ -244,7 +272,7 @@ function renderTarget(code) {
   card.appendChild(grid);
   if (target.chart && target.chart.length > 1) {
     card.appendChild(el("p", { textContent: "近 " + target.chart.length + " 個交易日走勢：" }));
-    card.appendChild(renderSparkline(target.chart, "#ffcf7a"));
+    card.appendChild(renderSparkline(target.chart, "#b45309"));
   }
   card.appendChild(el("p", { className: "source-note", textContent: "資料來源：" + target.data_source.name + "，最後更新 " + target.data_source.as_of }));
   updateTabActiveState();
@@ -265,12 +293,12 @@ function renderMacro() {
   if (goldPoints.length > 0) {
     const latestGold = goldPoints[goldPoints.length - 1];
     card.appendChild(el("p", { textContent: "國際金價（COMEX 黃金期貨）：$" + fmt(latestGold.close, 2) + " 美元（" + latestGold.date + "）" }));
-    if (goldPoints.length > 1) card.appendChild(renderSparkline(goldPoints, "#e0c46c"));
+    if (goldPoints.length > 1) card.appendChild(renderSparkline(goldPoints, "#eab308"));
   }
   if (fxPoints.length > 0) {
     const latestFx = fxPoints[fxPoints.length - 1];
     card.appendChild(el("p", { textContent: "USD/TWD：" + fmt(latestFx.close, 3) + "（" + latestFx.date + "）" }));
-    if (fxPoints.length > 1) card.appendChild(renderSparkline(fxPoints, "#7ab8ff"));
+    if (fxPoints.length > 1) card.appendChild(renderSparkline(fxPoints, "#2563eb"));
   }
   card.appendChild(el("p", { className: "source-note", textContent: "資料來源：" + macro.data_source.name + "，最後更新 " + macro.data_source.as_of }));
 }
