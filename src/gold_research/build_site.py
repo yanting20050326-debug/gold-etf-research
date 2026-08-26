@@ -218,6 +218,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .gauge-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 4px; }
   .discipline-card { background: var(--gold-bg); border: 1px solid var(--gold-border); border-radius: 8px; padding: 14px 16px; margin: 12px 0; }
   .discipline-list { margin: 8px 0 0; padding-left: 20px; font-size: 13px; line-height: 1.6; color: var(--text-secondary); }
+  .buy-hint { background: #eff6ff; border: 1px solid #93c5fd; border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; }
+  .buy-hint-text { font-weight: 700; color: #1e40af; margin: 0; }
   a { color: var(--accent); }
 </style>
 </head>
@@ -310,6 +312,9 @@ function renderDisciplineCard(target) {
   wrap.appendChild(el("h3", { textContent: "核心交易紀律（個人參考，非自動訊號）" }));
   const ps = target.indicators.pullback_stage;
   if (ps) {
+    const hintBox = el("div", { className: "buy-hint" });
+    hintBox.appendChild(el("p", { className: "buy-hint-text", textContent: "提示：" + ps.hint }));
+    wrap.appendChild(hintBox);
     wrap.appendChild(el("p", {
       textContent: "近 30 天高點 " + fmt(ps.recent_high, 2) + "，目前回檔 " + fmt(ps.pullback_pct, 1) + "%，對照紀律大概落在：" + ps.stage,
     }));

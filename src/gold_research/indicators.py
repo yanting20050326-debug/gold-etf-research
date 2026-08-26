@@ -145,6 +145,15 @@ def relative_position(
     return {"position": position, "label": label}
 
 
+_STAGE_HINTS = {
+    "觀察區（尚未回檔到位）": "尚未回檔到位，暫不建議進場",
+    "第一筆 40%": "符合第一筆進場條件，可考慮分批的第一筆 40%",
+    "加碼 20%（前提：趨勢沒壞）": "符合加碼條件，若趨勢未壞可加碼 20%",
+    "加碼 20%（前提：出現止跌）": "符合加碼條件，若已出現止跌可再加碼 20%",
+    "最後 20%（等重新轉強）": "已達較大回檔，最後 20% 務必等重新轉強才進場，避免無限攤平",
+}
+
+
 def pullback_stage(
     closes: list[float], window: int = 30
 ) -> dict[str, float | str] | None:
@@ -167,7 +176,12 @@ def pullback_stage(
         stage = "加碼 20%（前提：出現止跌）"
     else:
         stage = "最後 20%（等重新轉強）"
-    return {"recent_high": recent_high, "pullback_pct": pullback_pct, "stage": stage}
+    return {
+        "recent_high": recent_high,
+        "pullback_pct": pullback_pct,
+        "stage": stage,
+        "hint": _STAGE_HINTS[stage],
+    }
 
 
 def divergence_flag(

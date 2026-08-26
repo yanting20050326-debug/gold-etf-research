@@ -244,6 +244,7 @@ def test_build_payload_includes_pullback_stage():
     assert ps is not None
     assert "stage" in ps
     assert "pullback_pct" in ps
+    assert "hint" in ps
 
 
 def test_render_html_includes_discipline_card():
@@ -259,6 +260,8 @@ def test_render_html_includes_discipline_card():
     assert "renderDisciplineCard(target)" in html
     assert "回檔 3～4% 開始第一筆 40%" in html
     assert "不要無限攤平" in html
+    assert "buy-hint" in html
+    assert '"提示：" + ps.hint' in html
 
 
 def test_render_html_includes_position_gauge_and_auto_refresh():

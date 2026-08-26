@@ -169,6 +169,7 @@ def test_pullback_stage_first_tranche_zone():
     assert result["recent_high"] == 100.0
     assert result["pullback_pct"] == pytest.approx(3.0)
     assert result["stage"] == "第一筆 40%"
+    assert result["hint"] == "符合第一筆進場條件，可考慮分批的第一筆 40%"
 
 
 def test_pullback_stage_all_zone_boundaries():
