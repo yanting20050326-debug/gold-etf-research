@@ -32,6 +32,12 @@ class MacroSeries:
     stale: bool  # True 代表這次即時抓取失敗，改用快取資料
 
 
+@dataclass(frozen=True)
+class LatestQuote:
+    price: float
+    quote_time: str  # "YYYY-MM-DD HH:MM"（本機時區）
+
+
 def fetch_series(symbol: str, cache_path: Path, range_: str = "6mo") -> MacroSeries:
     """抓 `symbol`（例如 'GC=F'、'USDTWD=X'）的每日收盤序列。
 
@@ -94,6 +100,50 @@ def _read_cache(cache_path: Path) -> dict | None:
         "points": [PricePoint(**p) for p in raw["points"]],
         "as_of": raw["as_of"],
     }
+
+
+def fetch_latest_price(symbol: str) -> LatestQuote | None:
+    """抓 `symbol` 最新一筆分鐘線收盤價，只用來顯示「現在價格」。
+
+    技術指標永遠只用 `fetch_series` 的日線資料計算，不受這個函式影響；
+    這裡抓不到（收盤時段、逾時、格式異常）一律回傳 None，呼叫端應該退回
+    日線最後一筆收盤價，不讓整個網站產生流程中斷。
+    """
+    try:
+        response = requests.get(
+            CHART_URL.format(symbol=symbol),
+            params={"interval": "1m", "range": "1d"},
+            timeout=10,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        response.raise_for_status()
+        payload = response.json()
+        result = payload["chart"]["result"][0]
+        timestamps = result["timestamp"]
+        closes = result["indicators"]["quote"][0]["close"]
+        for ts, close in zip(reversed(timestamps), reversed(closes)):
+            if close is not None:
+                return LatestQuote(
+                    price=float(close), quote_time=_timestamp_to_datetime(ts)
+                )
+        return None
+    except (
+        requests.RequestException,
+        ValueError,
+        KeyError,
+        TypeError,
+        IndexError,
+    ) as exc:
+        logger.warning("{} 即時報價抓取失敗：{}", symbol, exc)
+        return None
+
+
+def _timestamp_to_datetime(timestamp: int) -> str:
+    return (
+        datetime.fromtimestamp(timestamp, tz=UTC)
+        .astimezone()
+        .strftime("%Y-%m-%d %H:%M")
+    )
 
 
 def _write_cache(cache_path: Path, series: MacroSeries) -> None:

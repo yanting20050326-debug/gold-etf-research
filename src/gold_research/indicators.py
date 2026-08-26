@@ -184,6 +184,48 @@ def pullback_stage(
     }
 
 
+def _clamp(value: float, lo: float = 0.0, hi: float = 100.0) -> float:
+    return max(lo, min(hi, value))
+
+
+def technical_score(
+    close: float,
+    ma20: float | None,
+    rsi14: float | None,
+    bollinger: dict[str, float | None],
+    macd_value: float | None,
+) -> dict | None:
+    """把 MA20/RSI14/布林/MACD 換算成 0~100 冷熱分數。
+
+    分數越高代表技術面越偏冷卻（區間低檔），分數越低代表越偏熱（區間高檔）。
+    任一指標缺值就跳過那一項，四項（或更少）平均得出總分；沒有任何指標可用時
+    回傳 None。這不是自動買賣訊號，只是把既有指標換算成同一個尺度方便比較。
+    """
+    scores: dict[str, float] = {}
+    if rsi14 is not None:
+        scores["rsi14"] = _clamp(100 - rsi14)
+    upper, lower = bollinger.get("upper"), bollinger.get("lower")
+    if upper is not None and lower is not None and upper != lower:
+        position_pct = (close - lower) / (upper - lower) * 100
+        scores["bollinger"] = _clamp(100 - position_pct)
+    if ma20 is not None and ma20 != 0:
+        deviation_pct = (close - ma20) / ma20 * 100
+        scores["ma20"] = _clamp(50 - deviation_pct * 5)
+    if macd_value is not None and close != 0:
+        macd_pct = (macd_value / close) * 100
+        scores["macd"] = _clamp(50 - macd_pct * 10)
+    if not scores:
+        return None
+    composite = sum(scores.values()) / len(scores)
+    if composite >= 65:
+        label = "技術面偏冷"
+    elif composite >= 35:
+        label = "技術面中性"
+    else:
+        label = "技術面偏熱"
+    return {"scores": scores, "composite": composite, "label": label}
+
+
 def divergence_flag(
     gold_by_date: dict[str, float], fx_by_date: dict[str, float], window: int = 5
 ) -> dict[str, int | bool]:

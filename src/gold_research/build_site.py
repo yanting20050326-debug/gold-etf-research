@@ -7,8 +7,19 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 
-from gold_research.fetch_macro import MacroSeries, PricePoint, fetch_series
-from gold_research.fetch_twse import DailyBar, fetch_month
+from gold_research.fetch_macro import (
+    LatestQuote,
+    MacroSeries,
+    PricePoint,
+    fetch_latest_price,
+    fetch_series,
+)
+from gold_research.fetch_twse import (
+    DailyBar,
+    RealtimeQuote,
+    fetch_month,
+    fetch_realtime_quote,
+)
 from gold_research.indicators import (
     bollinger_bands,
     divergence_flag,
@@ -17,6 +28,7 @@ from gold_research.indicators import (
     relative_position,
     relative_strength_index,
     simple_moving_average,
+    technical_score,
     volatility_squeeze,
 )
 
@@ -87,10 +99,50 @@ def _compute_indicators(closes: list[float]) -> dict:
         "volatility_squeeze": volatility_squeeze(closes, 5, 20),
         "relative_position": relative_position(closes, 30),
         "pullback_stage": pullback_stage(closes, 30),
+        "technical_score": technical_score(
+            close=closes[-1],
+            ma20=sma20[-1],
+            rsi14=rsi14[-1],
+            bollinger={"upper": bands["upper"][-1], "lower": bands["lower"][-1]},
+            macd_value=macd_result["macd"][-1],
+        ),
     }
 
 
-def _build_twse_target(code: str, bars: list[DailyBar]) -> dict:
+def _build_latest(
+    trading_date: str, close: float, volume: int | None, realtime: object | None
+) -> dict:
+    """組裝 `latest` 欄位；有即時報價就用即時報價覆蓋顯示，沒有就用日線收盤。"""
+    if realtime is None:
+        return {
+            "trading_date": trading_date,
+            "close": close,
+            "volume": volume,
+            "quote_time": None,
+            "is_realtime": False,
+        }
+    if isinstance(realtime, RealtimeQuote):
+        return {
+            "trading_date": trading_date,
+            "close": realtime.price,
+            "volume": volume,
+            "quote_time": realtime.quote_time,
+            "is_realtime": True,
+        }
+    if isinstance(realtime, LatestQuote):
+        return {
+            "trading_date": trading_date,
+            "close": realtime.price,
+            "volume": volume,
+            "quote_time": realtime.quote_time,
+            "is_realtime": True,
+        }
+    raise TypeError(f"unsupported realtime quote type: {type(realtime)!r}")
+
+
+def _build_twse_target(
+    code: str, bars: list[DailyBar], realtime: RealtimeQuote | None = None
+) -> dict:
     meta = TARGET_META[code]
     closes = [bar.close for bar in bars]
     latest_bar = bars[-1]
@@ -101,11 +153,9 @@ def _build_twse_target(code: str, bars: list[DailyBar]) -> dict:
         "asset_class_note": meta["asset_class_note"],
         "badge": meta["badge"],
         "data_source": {"name": "TWSE STOCK_DAY", "as_of": latest_bar.trading_date},
-        "latest": {
-            "trading_date": latest_bar.trading_date,
-            "close": latest_bar.close,
-            "volume": latest_bar.volume,
-        },
+        "latest": _build_latest(
+            latest_bar.trading_date, latest_bar.close, latest_bar.volume, realtime
+        ),
         "indicators": _compute_indicators(closes),
         "chart": [
             {"trading_date": bar.trading_date, "close": bar.close} for bar in bars
@@ -113,7 +163,9 @@ def _build_twse_target(code: str, bars: list[DailyBar]) -> dict:
     }
 
 
-def _build_intl_gold_target(points: list[PricePoint], as_of: str) -> dict:
+def _build_intl_gold_target(
+    points: list[PricePoint], as_of: str, realtime: LatestQuote | None = None
+) -> dict:
     closes = [p.close for p in points]
     latest_point = points[-1]
     return {
@@ -123,11 +175,7 @@ def _build_intl_gold_target(points: list[PricePoint], as_of: str) -> dict:
         "asset_class_note": INTL_GOLD_META["asset_class_note"],
         "badge": INTL_GOLD_META["badge"],
         "data_source": {"name": "Yahoo Finance (GC=F)", "as_of": as_of},
-        "latest": {
-            "trading_date": latest_point.date,
-            "close": latest_point.close,
-            "volume": None,
-        },
+        "latest": _build_latest(latest_point.date, latest_point.close, None, realtime),
         "indicators": _compute_indicators(closes),
         "chart": [{"trading_date": p.date, "close": p.close} for p in points],
         "passbook_note": GOLD_PASSBOOK_NOTE,
@@ -139,11 +187,17 @@ def build_payload(
     macro_gold: MacroSeries,
     macro_fx: MacroSeries,
     generated_at: datetime,
+    twse_realtime: dict[str, RealtimeQuote | None] | None = None,
+    intl_gold_realtime: LatestQuote | None = None,
 ) -> dict:
-    targets = {code: _build_twse_target(code, bars) for code, bars in twse_bars.items()}
+    twse_realtime = twse_realtime or {}
+    targets = {
+        code: _build_twse_target(code, bars, twse_realtime.get(code))
+        for code, bars in twse_bars.items()
+    }
     if macro_gold.points:
         targets[INTL_GOLD_CODE] = _build_intl_gold_target(
-            macro_gold.points, macro_gold.as_of
+            macro_gold.points, macro_gold.as_of, intl_gold_realtime
         )
 
     gold_by_date = {p.date: p.close for p in macro_gold.points}
@@ -216,6 +270,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .gauge-track { position: relative; height: 8px; background: linear-gradient(90deg, #86efac, #fde68a, #fca5a5); border-radius: 999px; }
   .gauge-marker { position: absolute; top: -4px; width: 4px; height: 16px; background: var(--text); border-radius: 2px; transform: translateX(-2px); }
   .gauge-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+  .score-card { background: var(--stat-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin: 12px 0; }
+  .score-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .score-label { font-weight: 700; font-size: 15px; }
+  .score-composite { font-weight: 700; font-size: 28px; color: var(--accent); }
+  .score-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; margin-top: 10px; }
+  .score-item { background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px; text-align: center; }
+  .score-item-label { display: block; font-size: 11px; color: var(--text-muted); }
+  .score-item-value { display: block; font-weight: 700; font-size: 18px; margin-top: 2px; }
+  .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 999px; background: #22c55e; margin-right: 6px; vertical-align: middle; }
   .discipline-card { background: var(--gold-bg); border: 1px solid var(--gold-border); border-radius: 8px; padding: 14px 16px; margin: 12px 0; }
   .discipline-list { margin: 8px 0 0; padding-left: 20px; font-size: 13px; line-height: 1.6; color: var(--text-secondary); }
   .buy-hint { background: #eff6ff; border: 1px solid #93c5fd; border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; }
@@ -346,6 +409,28 @@ function renderPositionGauge(rp) {
   return wrap;
 }
 
+const SCORE_ITEM_LABELS = { rsi14: "RSI14", bollinger: "布林通道", ma20: "MA20", macd: "MACD" };
+
+function renderTechnicalScore(target) {
+  const ts = target.indicators.technical_score;
+  if (!ts) return null;
+  const wrap = el("div", { className: "score-card" });
+  const headRow = el("div", { className: "score-head" });
+  headRow.appendChild(el("span", { className: "score-label", textContent: ts.label }));
+  headRow.appendChild(el("span", { className: "score-composite", textContent: fmt(ts.composite, 0) + " 分" }));
+  wrap.appendChild(headRow);
+  wrap.appendChild(el("p", { className: "source-note", textContent: "分數越高代表技術面越偏冷卻、分數越低代表越偏熱；由 RSI／布林／MA20／MACD 平均得出，僅供研究參考，不是進出場訊號。" }));
+  const grid = el("div", { className: "score-grid" });
+  Object.keys(ts.scores).forEach((key) => {
+    const item = el("div", { className: "score-item" });
+    item.appendChild(el("span", { className: "score-item-label", textContent: SCORE_ITEM_LABELS[key] || key }));
+    item.appendChild(el("span", { className: "score-item-value", textContent: fmt(ts.scores[key], 0) }));
+    grid.appendChild(item);
+  });
+  wrap.appendChild(grid);
+  return wrap;
+}
+
 function indicatorCard(key, label, valueText, extraNode) {
   const card = el("div", { className: "indicator", tabIndex: 0 });
   const summary = el("div", { className: "indicator-summary", textContent: label + "：" + valueText });
@@ -419,10 +504,20 @@ function renderTarget(code) {
   heading.appendChild(el("span", { className: "badge", textContent: target.badge }));
   card.appendChild(heading);
   card.appendChild(el("p", { textContent: target.asset_class_note }));
-  card.appendChild(el("p", { textContent: "最新收盤：" + fmt(target.latest.close, 2) + "（" + target.latest.trading_date + "）" }));
+  const priceLine = el("p", {});
+  if (target.latest.is_realtime) {
+    const dot = el("span", { className: "live-dot" });
+    priceLine.appendChild(dot);
+    priceLine.appendChild(document.createTextNode("現在：" + fmt(target.latest.close, 2) + "（" + target.latest.quote_time + " 盤中，非官方公告價）"));
+  } else {
+    priceLine.appendChild(document.createTextNode("最新收盤：" + fmt(target.latest.close, 2) + "（" + target.latest.trading_date + "，非即時）"));
+  }
+  card.appendChild(priceLine);
   if (target.passbook_note) {
     card.appendChild(el("p", { className: "source-note", textContent: target.passbook_note }));
   }
+  const scoreNode = renderTechnicalScore(target);
+  if (scoreNode) card.appendChild(scoreNode);
   renderHorizonTabs(card);
   card.appendChild(el("p", { className: "source-note", textContent: currentHorizon === "short" ? "短線：技術面擇時指標（RSI／布林通道／波動壓縮／區間位置）" : "長線：趨勢與總體面（MA／MACD，下方另有匯率、背離旗標）" }));
   card.appendChild(renderDisciplineCard(target));
@@ -530,7 +625,12 @@ def main() -> None:
     macro_gold = fetch_series("GC=F", DATA_CACHE_DIR / "gc_f.json")
     macro_fx = fetch_series("USDTWD=X", DATA_CACHE_DIR / "usdtwd.json")
 
-    payload = build_payload(twse_bars, macro_gold, macro_fx, now)
+    twse_realtime = {code: fetch_realtime_quote(code) for code in TARGET_META}
+    intl_gold_realtime = fetch_latest_price("GC=F")
+
+    payload = build_payload(
+        twse_bars, macro_gold, macro_fx, now, twse_realtime, intl_gold_realtime
+    )
 
     (SITE_DIR / "data").mkdir(parents=True, exist_ok=True)
     (SITE_DIR / "data" / "gold_site.json").write_text(

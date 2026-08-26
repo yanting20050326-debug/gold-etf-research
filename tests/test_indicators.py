@@ -9,6 +9,7 @@ from gold_research.indicators import (
     relative_position,
     relative_strength_index,
     simple_moving_average,
+    technical_score,
     volatility_squeeze,
 )
 
@@ -187,6 +188,70 @@ def test_pullback_stage_all_zone_boundaries():
 
 def test_pullback_stage_insufficient_data():
     assert pullback_stage([100.0] * 10, window=30) is None
+
+
+def test_technical_score_computes_composite_and_label():
+    result = technical_score(
+        close=48.10,
+        ma20=45.05,
+        rsi14=75.78,
+        bollinger={"upper": 48.85, "lower": 41.26},
+        macd_value=1.3349,
+    )
+    assert result["scores"]["rsi14"] == pytest.approx(24.22, abs=0.01)
+    assert result["scores"]["bollinger"] == pytest.approx(9.89, abs=0.05)
+    assert result["scores"]["ma20"] == pytest.approx(16.14, abs=0.05)
+    assert result["scores"]["macd"] == pytest.approx(22.25, abs=0.01)
+    assert result["composite"] == pytest.approx(18.13, abs=0.05)
+    assert result["label"] == "技術面偏熱"
+
+
+def test_technical_score_neutral_band():
+    result = technical_score(
+        close=100.0,
+        ma20=100.0,
+        rsi14=50.0,
+        bollinger={"upper": 110.0, "lower": 90.0},
+        macd_value=0.0,
+    )
+    assert result["composite"] == pytest.approx(50.0)
+    assert result["label"] == "技術面中性"
+
+
+def test_technical_score_cold_band():
+    result = technical_score(
+        close=90.0,
+        ma20=100.0,
+        rsi14=10.0,
+        bollinger={"upper": 110.0, "lower": 90.0},
+        macd_value=-2.0,
+    )
+    assert result["label"] == "技術面偏冷"
+
+
+def test_technical_score_returns_none_when_no_inputs_available():
+    assert (
+        technical_score(
+            close=100.0,
+            ma20=None,
+            rsi14=None,
+            bollinger={"upper": None, "lower": None},
+            macd_value=None,
+        )
+        is None
+    )
+
+
+def test_technical_score_handles_partial_inputs():
+    result = technical_score(
+        close=100.0,
+        ma20=None,
+        rsi14=20.0,
+        bollinger={"upper": None, "lower": None},
+        macd_value=None,
+    )
+    assert set(result["scores"].keys()) == {"rsi14"}
+    assert result["composite"] == pytest.approx(80.0)
 
 
 def test_divergence_flag_excludes_zero_change_days():

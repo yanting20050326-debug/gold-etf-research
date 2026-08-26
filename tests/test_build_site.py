@@ -2,8 +2,8 @@ import json
 from datetime import UTC, datetime
 
 from gold_research.build_site import build_payload, render_html
-from gold_research.fetch_macro import MacroSeries, PricePoint
-from gold_research.fetch_twse import DailyBar
+from gold_research.fetch_macro import LatestQuote, MacroSeries, PricePoint
+from gold_research.fetch_twse import DailyBar, RealtimeQuote
 
 
 def _sample_bars(base: float = 46.0) -> list[DailyBar]:
@@ -278,3 +278,86 @@ def test_render_html_includes_position_gauge_and_auto_refresh():
     assert "gauge-track" in html
     assert "refreshSiteData" in html
     assert "SITE_DATA.auto_refresh_seconds" in html
+
+
+def test_build_payload_includes_technical_score():
+    macro_gold, macro_fx = _sample_macro()
+    payload = build_payload(
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
+    )
+    ts = payload["targets"]["00635U"]["indicators"]["technical_score"]
+    assert ts is not None
+    assert "composite" in ts
+    assert "label" in ts
+    assert set(ts["scores"].keys()) == {"rsi14", "bollinger", "ma20", "macd"}
+
+
+def test_build_payload_uses_realtime_quote_when_available():
+    macro_gold, macro_fx = _sample_macro()
+    realtime = RealtimeQuote(
+        code="00635U",
+        price=99.99,
+        previous_close=46.0,
+        quote_date="20260820",
+        quote_time="13:25:00",
+    )
+    payload = build_payload(
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
+        twse_realtime={"00635U": realtime},
+    )
+    latest = payload["targets"]["00635U"]["latest"]
+    assert latest["close"] == 99.99
+    assert latest["is_realtime"] is True
+    assert latest["quote_time"] == "13:25:00"
+
+
+def test_build_payload_falls_back_to_daily_close_when_realtime_missing():
+    macro_gold, macro_fx = _sample_macro()
+    bars = _sample_bars()
+    payload = build_payload(
+        {"00635U": bars},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
+        twse_realtime={"00635U": None},
+    )
+    latest = payload["targets"]["00635U"]["latest"]
+    assert latest["close"] == bars[-1].close
+    assert latest["is_realtime"] is False
+
+
+def test_build_payload_uses_realtime_quote_for_intl_gold():
+    macro_gold, macro_fx = _sample_macro()
+    intl_realtime = LatestQuote(price=2077.7, quote_time="2026-08-20 13:25")
+    payload = build_payload(
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
+        intl_gold_realtime=intl_realtime,
+    )
+    latest = payload["targets"]["XAUUSD"]["latest"]
+    assert latest["close"] == 2077.7
+    assert latest["is_realtime"] is True
+
+
+def test_render_html_includes_score_panel_and_realtime_price():
+    macro_gold, macro_fx = _sample_macro()
+    payload = build_payload(
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
+    )
+    html = render_html(payload)
+
+    assert "renderTechnicalScore(target)" in html
+    assert "score-composite" in html
+    assert "target.latest.is_realtime" in html
+    assert "live-dot" in html

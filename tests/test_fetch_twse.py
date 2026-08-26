@@ -1,6 +1,13 @@
 import pytest
 
-from gold_research.fetch_twse import DailyBar, TwseFetchError, _parse_row, fetch_month
+from gold_research.fetch_twse import (
+    DailyBar,
+    RealtimeQuote,
+    TwseFetchError,
+    _parse_row,
+    fetch_month,
+    fetch_realtime_quote,
+)
 
 
 def test_parse_row_converts_roc_date_and_numbers():
@@ -121,3 +128,91 @@ def test_fetch_month_skips_unparseable_row(monkeypatch):
     bars = fetch_month("00635U", 2026, 8)
     assert len(bars) == 1
     assert bars[0].close == 46.48
+
+
+def test_fetch_realtime_quote_parses_real_response_shape(monkeypatch):
+    # Shape matches an actual live response captured from the endpoint.
+    sample_payload = {
+        "msgArray": [
+            {
+                "c": "00635U",
+                "z": "48.1000",
+                "y": "48.0700",
+                "d": "20260826",
+                "t": "13:30:00",
+            }
+        ],
+        "rtmessage": "OK",
+    }
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return sample_payload
+
+    def fake_get(url, params, headers, timeout):
+        assert params["ex_ch"] == "tse_00635U.tw"
+        return FakeResponse()
+
+    monkeypatch.setattr("gold_research.fetch_twse.requests.get", fake_get)
+    quote = fetch_realtime_quote("00635U")
+    assert quote == RealtimeQuote(
+        code="00635U",
+        price=48.10,
+        previous_close=48.07,
+        quote_date="20260826",
+        quote_time="13:30:00",
+    )
+
+
+def test_fetch_realtime_quote_falls_back_to_previous_close_when_unmatched(
+    monkeypatch,
+):
+    # "z" (last trade) is blank when the security hasn't traded yet today.
+    sample_payload = {
+        "msgArray": [
+            {"c": "00635U", "z": "", "y": "48.0700", "d": "20260826", "t": ""}
+        ],
+        "rtmessage": "OK",
+    }
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return sample_payload
+
+    monkeypatch.setattr(
+        "gold_research.fetch_twse.requests.get",
+        lambda url, params, headers, timeout: FakeResponse(),
+    )
+    quote = fetch_realtime_quote("00635U")
+    assert quote.price == 48.07
+
+
+def test_fetch_realtime_quote_returns_none_on_bad_status(monkeypatch):
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"msgArray": [], "rtmessage": "MIS-200"}
+
+    monkeypatch.setattr(
+        "gold_research.fetch_twse.requests.get",
+        lambda url, params, headers, timeout: FakeResponse(),
+    )
+    assert fetch_realtime_quote("00635U") is None
+
+
+def test_fetch_realtime_quote_returns_none_on_network_error(monkeypatch):
+    import requests
+
+    def raise_connection_error(url, params, headers, timeout):
+        raise requests.ConnectionError("network down")
+
+    monkeypatch.setattr("gold_research.fetch_twse.requests.get", raise_connection_error)
+    assert fetch_realtime_quote("00635U") is None
