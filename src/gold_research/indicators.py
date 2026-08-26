@@ -145,6 +145,31 @@ def relative_position(
     return {"position": position, "label": label}
 
 
+def pullback_stage(
+    closes: list[float], window: int = 30
+) -> dict[str, float | str] | None:
+    """近 window 天高點以來的回檔幅度，對照分批進場紀律標出目前處於哪個階段。"""
+    if len(closes) < window:
+        return None
+    segment = closes[-window:]
+    recent_high = max(segment)
+    current = closes[-1]
+    pullback_pct = (
+        0.0 if recent_high == 0 else (recent_high - current) / recent_high * 100
+    )
+    if pullback_pct < 3:
+        stage = "觀察區（尚未回檔到位）"
+    elif pullback_pct < 5:
+        stage = "第一筆 40%"
+    elif pullback_pct < 6:
+        stage = "加碼 20%（前提：趨勢沒壞）"
+    elif pullback_pct < 9:
+        stage = "加碼 20%（前提：出現止跌）"
+    else:
+        stage = "最後 20%（等重新轉強）"
+    return {"recent_high": recent_high, "pullback_pct": pullback_pct, "stage": stage}
+
+
 def divergence_flag(
     gold_by_date: dict[str, float], fx_by_date: dict[str, float], window: int = 5
 ) -> dict[str, int | bool]:

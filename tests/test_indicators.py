@@ -5,6 +5,7 @@ from gold_research.indicators import (
     divergence_flag,
     exponential_moving_average,
     macd,
+    pullback_stage,
     relative_position,
     relative_strength_index,
     simple_moving_average,
@@ -160,6 +161,31 @@ def test_divergence_flag_not_divergent_when_mostly_opposite():
         "checked_days": 5,
         "is_divergent": False,
     }
+
+
+def test_pullback_stage_first_tranche_zone():
+    closes = [100.0] * 29 + [97.0]  # 30-day high=100, current=97 -> pullback=3%
+    result = pullback_stage(closes, window=30)
+    assert result["recent_high"] == 100.0
+    assert result["pullback_pct"] == pytest.approx(3.0)
+    assert result["stage"] == "第一筆 40%"
+
+
+def test_pullback_stage_all_zone_boundaries():
+    def make(pullback_target_pct):
+        high = 100.0
+        current = high * (1 - pullback_target_pct / 100)
+        return [high] * 29 + [current]
+
+    assert pullback_stage(make(1))["stage"] == "觀察區（尚未回檔到位）"
+    assert pullback_stage(make(4))["stage"] == "第一筆 40%"
+    assert pullback_stage(make(5.5))["stage"] == "加碼 20%（前提：趨勢沒壞）"
+    assert pullback_stage(make(7))["stage"] == "加碼 20%（前提：出現止跌）"
+    assert pullback_stage(make(12))["stage"] == "最後 20%（等重新轉強）"
+
+
+def test_pullback_stage_insufficient_data():
+    assert pullback_stage([100.0] * 10, window=30) is None
 
 
 def test_divergence_flag_excludes_zero_change_days():

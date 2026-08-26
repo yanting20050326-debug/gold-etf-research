@@ -13,6 +13,7 @@ from gold_research.indicators import (
     bollinger_bands,
     divergence_flag,
     macd,
+    pullback_stage,
     relative_position,
     relative_strength_index,
     simple_moving_average,
@@ -85,6 +86,7 @@ def _compute_indicators(closes: list[float]) -> dict:
         },
         "volatility_squeeze": volatility_squeeze(closes, 5, 20),
         "relative_position": relative_position(closes, 30),
+        "pullback_stage": pullback_stage(closes, 30),
     }
 
 
@@ -214,6 +216,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .gauge-track { position: relative; height: 8px; background: linear-gradient(90deg, #86efac, #fde68a, #fca5a5); border-radius: 999px; }
   .gauge-marker { position: absolute; top: -4px; width: 4px; height: 16px; background: var(--text); border-radius: 2px; transform: translateX(-2px); }
   .gauge-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+  .discipline-card { background: var(--gold-bg); border: 1px solid var(--gold-border); border-radius: 8px; padding: 14px 16px; margin: 12px 0; }
+  .discipline-list { margin: 8px 0 0; padding-left: 20px; font-size: 13px; line-height: 1.6; color: var(--text-secondary); }
   a { color: var(--accent); }
 </style>
 </head>
@@ -286,6 +290,39 @@ function renderSparkline(points, color) {
   pathEl.setAttribute("stroke-width", "2");
   svg.appendChild(pathEl);
   return svg;
+}
+
+const DISCIPLINE_RULES = [
+  "只做中期多頭的黃金。",
+  "不在暴漲創高時追價。",
+  "回檔 3～4% 開始第一筆 40%。",
+  "回檔 5～6%，趨勢沒壞再加 20%。",
+  "6～9% 區間出現止跌，再加 20%。",
+  "最後 20% 一定等重新轉強。",
+  "跌破重要前低，立即停止加碼。",
+  "不要無限攤平。",
+  "+5%、+8%、+10～12% 分批獲利。",
+  "剩餘 40% 讓趨勢決定出場。",
+];
+
+function renderDisciplineCard(target) {
+  const wrap = el("div", { className: "discipline-card" });
+  wrap.appendChild(el("h3", { textContent: "核心交易紀律（個人參考，非自動訊號）" }));
+  const ps = target.indicators.pullback_stage;
+  if (ps) {
+    wrap.appendChild(el("p", {
+      textContent: "近 30 天高點 " + fmt(ps.recent_high, 2) + "，目前回檔 " + fmt(ps.pullback_pct, 1) + "%，對照紀律大概落在：" + ps.stage,
+    }));
+  } else {
+    wrap.appendChild(el("p", { className: "source-note", textContent: "資料不足，無法計算目前回檔幅度。" }));
+  }
+  const list = el("ul", { className: "discipline-list" });
+  DISCIPLINE_RULES.forEach((rule) => {
+    list.appendChild(el("li", { textContent: rule }));
+  });
+  wrap.appendChild(list);
+  wrap.appendChild(el("p", { className: "source-note", textContent: "回檔基準為近 30 天高點；趨勢是否轉強、止跌、跌破前低仍需自行判斷，本卡不做自動買賣訊號。獲利分批（+5%/+8%/+10~12%）需要你自己記錄進場價才能對照，本站不追蹤持倉。" }));
+  return wrap;
 }
 
 function renderPositionGauge(rp) {
@@ -383,6 +420,7 @@ function renderTarget(code) {
   }
   renderHorizonTabs(card);
   card.appendChild(el("p", { className: "source-note", textContent: currentHorizon === "short" ? "短線：技術面擇時指標（RSI／布林通道／波動壓縮／區間位置）" : "長線：趨勢與總體面（MA／MACD，下方另有匯率、背離旗標）" }));
+  card.appendChild(renderDisciplineCard(target));
   const grid = el("div", { className: "indicator-grid" });
   if (currentHorizon === "short") {
     grid.appendChild(indicatorCard("rsi14", "RSI14", fmt(target.indicators.rsi14, 2)));

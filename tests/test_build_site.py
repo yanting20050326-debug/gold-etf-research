@@ -232,6 +232,35 @@ def test_render_html_has_no_candidates_section():
     assert "renderCandidates" not in html
 
 
+def test_build_payload_includes_pullback_stage():
+    macro_gold, macro_fx = _sample_macro()
+    payload = build_payload(
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
+    )
+    ps = payload["targets"]["00635U"]["indicators"]["pullback_stage"]
+    assert ps is not None
+    assert "stage" in ps
+    assert "pullback_pct" in ps
+
+
+def test_render_html_includes_discipline_card():
+    macro_gold, macro_fx = _sample_macro()
+    payload = build_payload(
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
+    )
+    html = render_html(payload)
+
+    assert "renderDisciplineCard(target)" in html
+    assert "回檔 3～4% 開始第一筆 40%" in html
+    assert "不要無限攤平" in html
+
+
 def test_render_html_includes_position_gauge_and_auto_refresh():
     macro_gold, macro_fx = _sample_macro()
     payload = build_payload(
