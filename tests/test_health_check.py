@@ -8,7 +8,6 @@ def _valid_payload(as_of: str = "2026-08-20") -> dict:
         "disclaimer": "...",
         "targets": {"00635U": {"data_source": {"as_of": as_of}}},
         "macro_context": {"data_source": {"as_of": as_of}, "stale": False},
-        "candidates": [{"code": "00708L"}],
     }
 
 
@@ -43,8 +42,8 @@ def test_check_payload_warns_when_macro_context_is_stale_flagged():
     assert any(i.severity == "warning" and "快取" in i.message for i in issues)
 
 
-def test_check_payload_warns_on_empty_candidates():
+def test_check_payload_checks_staleness_for_every_target():
     payload = _valid_payload()
-    payload["candidates"] = []
+    payload["targets"]["00708L"] = {"data_source": {"as_of": "2026-08-01"}}
     issues = check_payload(payload, today=date(2026, 8, 20))
-    assert any(i.severity == "warning" and "候選" in i.message for i in issues)
+    assert any(i.severity == "warning" and "00708L" in i.message for i in issues)

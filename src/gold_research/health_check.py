@@ -26,7 +26,7 @@ class HealthIssue:
 def check_payload(payload: dict, today: date) -> list[HealthIssue]:
     issues: list[HealthIssue] = []
 
-    for key in ("disclaimer", "targets", "macro_context", "candidates"):
+    for key in ("disclaimer", "targets", "macro_context"):
         if key not in payload:
             issues.append(HealthIssue("error", f"缺少必要欄位：{key}"))
     if issues:
@@ -34,10 +34,10 @@ def check_payload(payload: dict, today: date) -> list[HealthIssue]:
 
     if "00635U" not in payload["targets"]:
         issues.append(HealthIssue("error", "targets 缺少 00635U"))
-    else:
-        target = payload["targets"]["00635U"]
+
+    for code, target in payload["targets"].items():
         as_of_str = target.get("data_source", {}).get("as_of")
-        issues.extend(_check_staleness(as_of_str, today, "00635U 價格"))
+        issues.extend(_check_staleness(as_of_str, today, f"{code} 價格"))
 
     macro_as_of = payload.get("macro_context", {}).get("data_source", {}).get("as_of")
     issues.extend(_check_staleness(macro_as_of, today, "總體背景參考"))
@@ -46,9 +46,6 @@ def check_payload(payload: dict, today: date) -> list[HealthIssue]:
         issues.append(
             HealthIssue("warning", "總體背景參考目前顯示的是快取資料（上次抓取失敗）")
         )
-
-    if len(payload.get("candidates", [])) == 0:
-        issues.append(HealthIssue("warning", "候選標的清單是空的"))
 
     return issues
 

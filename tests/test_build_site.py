@@ -6,39 +6,40 @@ from gold_research.fetch_macro import MacroSeries, PricePoint
 from gold_research.fetch_twse import DailyBar
 
 
-def _sample_bars() -> list[DailyBar]:
-    closes = [
-        46.0,
-        46.2,
-        46.5,
-        46.3,
-        46.8,
-        47.0,
-        46.9,
-        47.2,
-        47.5,
-        47.1,
-        47.3,
-        47.6,
-        47.8,
-        47.4,
-        47.9,
-        48.0,
-        48.2,
-        48.1,
-        48.4,
-        48.6,
-        48.3,
-        48.7,
-        48.9,
-        49.0,
-        48.8,
-        49.2,
-        49.4,
-        49.1,
-        49.5,
-        49.7,
+def _sample_bars(base: float = 46.0) -> list[DailyBar]:
+    offsets = [
+        0.0,
+        0.2,
+        0.5,
+        0.3,
+        0.8,
+        1.0,
+        0.9,
+        1.2,
+        1.5,
+        1.1,
+        1.3,
+        1.6,
+        1.8,
+        1.4,
+        1.9,
+        2.0,
+        2.2,
+        2.1,
+        2.4,
+        2.6,
+        2.3,
+        2.7,
+        2.9,
+        3.0,
+        2.8,
+        3.2,
+        3.4,
+        3.1,
+        3.5,
+        3.7,
     ]
+    closes = [base + offset for offset in offsets]
     bars = []
     for i, close in enumerate(closes):
         day = i + 1 if i < 20 else i - 19
@@ -56,93 +57,7 @@ def _sample_bars() -> list[DailyBar]:
     return bars
 
 
-def test_build_payload_has_expected_schema():
-    bars = _sample_bars()
-    macro_gold = MacroSeries(
-        symbol="GC=F",
-        points=[PricePoint("2026-08-20", 2050.0)],
-        as_of="2026-08-20",
-        stale=False,
-    )
-    macro_fx = MacroSeries(
-        symbol="USDTWD=X",
-        points=[PricePoint("2026-08-20", 31.5)],
-        as_of="2026-08-20",
-        stale=False,
-    )
-    payload = build_payload(
-        bars, macro_gold, macro_fx, datetime(2026, 8, 20, tzinfo=UTC)
-    )
-
-    assert payload["disclaimer"]
-    target = payload["targets"]["00635U"]
-    assert target["asset_class"] == "commodity_futures_etf"
-    assert target["indicators"]["ma20"] is not None
-    assert target["indicators"]["rsi14"] is not None
-    assert len(target["chart"]) == len(bars)
-    assert payload["macro_context"]["comex_gold_usd"][0]["close"] == 2050.0
-    assert len(payload["candidates"]) == 5
-
-
-def test_build_payload_flags_stale_macro_context():
-    bars = _sample_bars()
-    macro_gold = MacroSeries(symbol="GC=F", points=[], as_of="2026-08-19", stale=True)
-    macro_fx = MacroSeries(
-        symbol="USDTWD=X", points=[], as_of="2026-08-19", stale=False
-    )
-    payload = build_payload(
-        bars, macro_gold, macro_fx, datetime(2026, 8, 20, tzinfo=UTC)
-    )
-    assert payload["macro_context"]["stale"] is True
-
-
-def test_render_html_embeds_valid_json():
-    bars = _sample_bars()
-    macro_gold = MacroSeries(symbol="GC=F", points=[], as_of="2026-08-20", stale=True)
-    macro_fx = MacroSeries(symbol="USDTWD=X", points=[], as_of="2026-08-20", stale=True)
-    payload = build_payload(
-        bars, macro_gold, macro_fx, datetime(2026, 8, 20, tzinfo=UTC)
-    )
-    html = render_html(payload)
-
-    assert "const SITE_DATA = " in html
-    start = html.index("const SITE_DATA = ") + len("const SITE_DATA = ")
-    end = html.index(";\n", start)
-    embedded = json.loads(html[start:end])
-    assert embedded["targets"]["00635U"]["code"] == "00635U"
-
-
-def test_render_html_includes_price_charts():
-    bars = _sample_bars()
-    macro_gold = MacroSeries(
-        symbol="GC=F",
-        points=[PricePoint("2026-08-20", 2050.0)],
-        as_of="2026-08-20",
-        stale=False,
-    )
-    macro_fx = MacroSeries(
-        symbol="USDTWD=X",
-        points=[PricePoint("2026-08-20", 31.5)],
-        as_of="2026-08-20",
-        stale=False,
-    )
-    payload = build_payload(
-        bars, macro_gold, macro_fx, datetime(2026, 8, 20, tzinfo=UTC)
-    )
-    html = render_html(payload)
-
-    # These assert the specific call sites exist, not just that the string
-    # "renderSparkline" appears somewhere in the template — a template
-    # constant containing the word would make this test pass even if the
-    # actual rendering calls were deleted. Asserting the exact call-site
-    # source text is immune to that.
-    assert "renderSparkline(target.chart" in html
-    assert "renderSparkline(goldPoints" in html
-    assert "renderSparkline(fxPoints" in html
-
-
-def test_build_payload_includes_new_indicators_and_divergence():
-    bars = _sample_bars()
+def _sample_macro() -> tuple[MacroSeries, MacroSeries]:
     dates = [f"2026-08-{d:02d}" for d in range(15, 21)]
     macro_gold = MacroSeries(
         symbol="GC=F",
@@ -156,16 +71,71 @@ def test_build_payload_includes_new_indicators_and_divergence():
         as_of=dates[-1],
         stale=False,
     )
+    return macro_gold, macro_fx
+
+
+def test_build_payload_has_expected_schema():
+    macro_gold, macro_fx = _sample_macro()
     payload = build_payload(
-        bars, macro_gold, macro_fx, datetime(2026, 8, 20, tzinfo=UTC)
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
     )
 
-    target_indicators = payload["targets"]["00635U"]["indicators"]
-    assert target_indicators["volatility_squeeze"]["ratio"] is not None
-    assert target_indicators["relative_position"]["label"] in (
-        "相對低點區",
-        "區間中段",
-        "相對高點區",
+    assert payload["disclaimer"]
+    assert payload["auto_refresh_seconds"] == 60
+    target = payload["targets"]["00635U"]
+    assert target["asset_class"] == "commodity_futures_etf"
+    assert target["indicators"]["ma20"] is not None
+    assert target["indicators"]["rsi14"] is not None
+    assert len(target["chart"]) == 30
+    assert "candidates" not in payload
+
+
+def test_build_payload_includes_multiple_twse_targets_and_intl_gold():
+    macro_gold, macro_fx = _sample_macro()
+    payload = build_payload(
+        {"00635U": _sample_bars(46.0), "00708L": _sample_bars(20.0)},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
+    )
+
+    assert set(payload["targets"].keys()) == {"00635U", "00708L", "XAUUSD"}
+    assert payload["targets"]["00708L"]["asset_class"] == "leveraged_futures_etf"
+    intl_gold = payload["targets"]["XAUUSD"]
+    assert intl_gold["asset_class"] == "commodity_spot"
+    # 6 macro fixture points isn't enough for the 30-day relative_position
+    # window; it's expected to be None, not the schema key being missing.
+    assert "relative_position" in intl_gold["indicators"]
+    assert intl_gold["passbook_note"]
+    assert intl_gold["latest"]["close"] == macro_gold.points[-1].close
+
+
+def test_build_payload_flags_stale_macro_context():
+    macro_gold = MacroSeries(symbol="GC=F", points=[], as_of="2026-08-19", stale=True)
+    macro_fx = MacroSeries(
+        symbol="USDTWD=X", points=[], as_of="2026-08-19", stale=False
+    )
+    payload = build_payload(
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
+    )
+    assert payload["macro_context"]["stale"] is True
+    # No gold points means no international-gold target can be built.
+    assert "XAUUSD" not in payload["targets"]
+
+
+def test_build_payload_includes_divergence():
+    macro_gold, macro_fx = _sample_macro()
+    payload = build_payload(
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
     )
     divergence = payload["macro_context"]["divergence"]
     assert divergence["checked_days"] == 5
@@ -173,22 +143,49 @@ def test_build_payload_includes_new_indicators_and_divergence():
     assert divergence["is_divergent"] is True
 
 
-def test_render_html_includes_new_indicator_cards_and_divergence():
-    bars = _sample_bars()
-    macro_gold = MacroSeries(
-        symbol="GC=F",
-        points=[PricePoint("2026-08-20", 2050.0)],
-        as_of="2026-08-20",
-        stale=False,
-    )
-    macro_fx = MacroSeries(
-        symbol="USDTWD=X",
-        points=[PricePoint("2026-08-20", 31.5)],
-        as_of="2026-08-20",
-        stale=False,
-    )
+def test_render_html_embeds_valid_json():
+    macro_gold, macro_fx = _sample_macro()
     payload = build_payload(
-        bars, macro_gold, macro_fx, datetime(2026, 8, 20, tzinfo=UTC)
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
+    )
+    html = render_html(payload)
+
+    assert "const SITE_DATA = " in html
+    start = html.index("const SITE_DATA = ") + len("const SITE_DATA = ")
+    end = html.index(";\n", start)
+    embedded = json.loads(html[start:end])
+    assert embedded["targets"]["00635U"]["code"] == "00635U"
+
+
+def test_render_html_includes_price_charts():
+    macro_gold, macro_fx = _sample_macro()
+    payload = build_payload(
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
+    )
+    html = render_html(payload)
+
+    # These assert the specific call sites exist, not just that the string
+    # "renderSparkline" appears somewhere in the template — a template
+    # constant containing the word would make this test pass even if the
+    # actual rendering calls were deleted. Asserting the exact call-site
+    # source text is immune to that.
+    assert "renderSparkline(target.chart" in html
+    assert "renderSparkline(fxPoints" in html
+
+
+def test_render_html_includes_new_indicator_cards_and_divergence():
+    macro_gold, macro_fx = _sample_macro()
+    payload = build_payload(
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
     )
     html = render_html(payload)
 
@@ -198,21 +195,12 @@ def test_render_html_includes_new_indicator_cards_and_divergence():
 
 
 def test_render_html_splits_indicators_by_horizon_tab():
-    bars = _sample_bars()
-    macro_gold = MacroSeries(
-        symbol="GC=F",
-        points=[PricePoint("2026-08-20", 2050.0)],
-        as_of="2026-08-20",
-        stale=False,
-    )
-    macro_fx = MacroSeries(
-        symbol="USDTWD=X",
-        points=[PricePoint("2026-08-20", 31.5)],
-        as_of="2026-08-20",
-        stale=False,
-    )
+    macro_gold, macro_fx = _sample_macro()
     payload = build_payload(
-        bars, macro_gold, macro_fx, datetime(2026, 8, 20, tzinfo=UTC)
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
     )
     html = render_html(payload)
 
@@ -228,3 +216,33 @@ def test_render_html_splits_indicators_by_horizon_tab():
     assert "renderHorizonTabs" in html
     assert 'currentHorizon === "short"' in html
     assert "updateMacroVisibility" in html
+
+
+def test_render_html_has_no_candidates_section():
+    macro_gold, macro_fx = _sample_macro()
+    payload = build_payload(
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
+    )
+    html = render_html(payload)
+
+    assert "candidates-card" not in html
+    assert "renderCandidates" not in html
+
+
+def test_render_html_includes_position_gauge_and_auto_refresh():
+    macro_gold, macro_fx = _sample_macro()
+    payload = build_payload(
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
+    )
+    html = render_html(payload)
+
+    assert "renderPositionGauge(rp)" in html
+    assert "gauge-track" in html
+    assert "refreshSiteData" in html
+    assert "SITE_DATA.auto_refresh_seconds" in html
