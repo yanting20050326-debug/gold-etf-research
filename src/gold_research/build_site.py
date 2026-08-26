@@ -12,9 +12,12 @@ from gold_research.fetch_macro import MacroSeries, fetch_series
 from gold_research.fetch_twse import DailyBar, fetch_month
 from gold_research.indicators import (
     bollinger_bands,
+    divergence_flag,
     macd,
+    relative_position,
     relative_strength_index,
     simple_moving_average,
+    volatility_squeeze,
 )
 
 DISCLAIMER = "商品／避險資產研究參考，不構成投資建議，不自動下單，不保證收益。"
@@ -39,6 +42,11 @@ def build_payload(
     rsi14 = relative_strength_index(closes, 14)
     bands = bollinger_bands(closes, 20, 2.0)
     macd_result = macd(closes, 12, 26, 9)
+    vol_squeeze = volatility_squeeze(closes, 5, 20)
+    rel_position = relative_position(closes, 30)
+    gold_by_date = {p.date: p.close for p in macro_gold.points}
+    fx_by_date = {p.date: p.close for p in macro_fx.points}
+    divergence = divergence_flag(gold_by_date, fx_by_date, 5)
     latest_bar = bars[-1]
 
     return {
@@ -72,6 +80,8 @@ def build_payload(
                         "signal": macd_result["signal"][-1],
                         "histogram": macd_result["histogram"][-1],
                     },
+                    "volatility_squeeze": vol_squeeze,
+                    "relative_position": rel_position,
                 },
                 "chart": [
                     {"trading_date": bar.trading_date, "close": bar.close}
@@ -85,6 +95,7 @@ def build_payload(
             "usdtwd": [asdict(p) for p in macro_fx.points],
             "stale": macro_gold.stale or macro_fx.stale,
             "note": "總體背景參考，非本頁技術指標，僅供市場情緒判讀。",
+            "divergence": divergence,
         },
         "candidates": [
             {
@@ -136,6 +147,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .disclaimer { background: var(--gold-bg); border: 1px solid var(--gold-border); color: #7a4a00; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; }
   .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 18px 50px var(--card-shadow); }
   .badge { display: inline-block; background: var(--gold-bg); color: var(--gold); border: 1px solid var(--gold-border); padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; margin-left: 8px; vertical-align: middle; }
+  .badge-warn { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
+  .badge-ok { background: #e0f2e9; color: #15803d; border-color: #86efac; }
   .indicator-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-top: 12px; }
   .indicator { background: var(--stat-bg); border: 1px solid var(--border); padding: 12px 14px; border-radius: 8px; cursor: pointer; }
   .indicator-summary { font-weight: 700; }
@@ -165,6 +178,8 @@ const INDICATOR_EXPLANATIONS = {
   rsi14: "RSI14 衡量近期漲跌力道，超過 70 通常視為短線過熱、低於 30 視為超賣。黃金的 RSI 過熱經常是避險情緒推動（例如地緣政治或股災），不必然代表基本面轉弱，過熱不代表一定要賣。",
   bollinger: "布林通道用近 20 日的平均價 ± 2 倍標準差，顯示目前價格相對波動區間的位置。黃金的波動區間常因美元走勢、央行政策會議而突然放大或收斂。",
   macd: "MACD 比較短期與長期均線的差距，搭配訊號線判斷動能轉折。黃金的動能轉折常跟利率預期（例如聯準會會議）同步發生，本身沒有財報或產業循環可以對照。",
+  volatility_squeeze: "比較近 5 日和近 20 日的價格波動度。比值明顯偏低代表最近盤整、波動被壓縮，過去這種情況常是變盤（不管往上或往下）前兆，不代表方向。",
+  relative_position: "顯示今天收盤價在近 30 天最高最低區間中的相對位置。低點區不代表馬上反彈、高點區也不代表馬上回檔，只是提供「現在算便宜還是貴」的參考座標。",
 };
 
 function fmt(value, digits) {
@@ -269,6 +284,12 @@ function renderTarget(code) {
   grid.appendChild(indicatorCard("rsi14", "RSI14", fmt(target.indicators.rsi14, 2)));
   grid.appendChild(indicatorCard("bollinger", "布林通道", fmt(target.indicators.bollinger.lower, 2) + " ~ " + fmt(target.indicators.bollinger.upper, 2)));
   grid.appendChild(indicatorCard("macd", "MACD", fmt(target.indicators.macd.macd, 4) + " / 訊號線 " + fmt(target.indicators.macd.signal, 4)));
+  const vs = target.indicators.volatility_squeeze;
+  const vsText = vs.ratio === null ? "資料不足" : fmt(vs.ratio, 2) + (vs.is_compressed ? "（壓縮中）" : "");
+  grid.appendChild(indicatorCard("volatility_squeeze", "波動壓縮比", vsText));
+  const rp = target.indicators.relative_position;
+  const rpText = rp === null ? "資料不足" : fmt(rp.position * 100, 0) + "%（" + rp.label + "）";
+  grid.appendChild(indicatorCard("relative_position", "區間位置", rpText));
   card.appendChild(grid);
   if (target.chart && target.chart.length > 1) {
     card.appendChild(el("p", { textContent: "近 " + target.chart.length + " 個交易日走勢：" }));
@@ -299,6 +320,16 @@ function renderMacro() {
     const latestFx = fxPoints[fxPoints.length - 1];
     card.appendChild(el("p", { textContent: "USD/TWD：" + fmt(latestFx.close, 3) + "（" + latestFx.date + "）" }));
     if (fxPoints.length > 1) card.appendChild(renderSparkline(fxPoints, "#2563eb"));
+  }
+  const div = macro.divergence;
+  if (div && div.checked_days > 0) {
+    const divLabel = div.is_divergent ? "⚠ 背離：近期同向天數偏多" : "正常反向關係";
+    const divBadgeClass = div.is_divergent ? "badge badge-warn" : "badge badge-ok";
+    const divP = el("p", {});
+    divP.appendChild(document.createTextNode("金價與美元關係："));
+    divP.appendChild(el("span", { className: divBadgeClass, textContent: divLabel }));
+    card.appendChild(divP);
+    card.appendChild(el("p", { className: "source-note", textContent: "近 " + div.checked_days + " 個有效交易日中，有 " + div.same_direction_days + " 天金價與美元同向變動（正常應多為反向）。" }));
   }
   card.appendChild(el("p", { className: "source-note", textContent: "資料來源：" + macro.data_source.name + "，最後更新 " + macro.data_source.as_of }));
 }

@@ -92,3 +92,78 @@ def macd(
         for a, b in zip(macd_line, signal_line)
     ]
     return {"macd": macd_line, "signal": signal_line, "histogram": histogram}
+
+
+def _stdev(values: list[float]) -> float:
+    mean = sum(values) / len(values)
+    variance = sum((v - mean) ** 2 for v in values) / len(values)
+    return variance**0.5
+
+
+def volatility_squeeze(
+    closes: list[float], short_window: int = 5, long_window: int = 20
+) -> dict[str, float | bool | None]:
+    """短期／長期波動度比值。比值明顯偏低代表近期盤整壓縮，常是變盤前兆（不代表方向）。"""
+    if len(closes) <= long_window:
+        return {
+            "short_vol": None,
+            "long_vol": None,
+            "ratio": None,
+            "is_compressed": False,
+        }
+    returns = [
+        (closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes))
+    ]
+    short_vol = _stdev(returns[-short_window:])
+    long_vol = _stdev(returns[-long_window:])
+    ratio = None if long_vol == 0 else short_vol / long_vol
+    is_compressed = ratio is not None and ratio < 0.5
+    return {
+        "short_vol": short_vol,
+        "long_vol": long_vol,
+        "ratio": ratio,
+        "is_compressed": is_compressed,
+    }
+
+
+def relative_position(
+    closes: list[float], window: int = 30
+) -> dict[str, float | str] | None:
+    """今天收盤價在近 window 天最高最低區間中的相對位置（0~1）與白話標籤。"""
+    if len(closes) < window:
+        return None
+    segment = closes[-window:]
+    lowest = min(segment)
+    highest = max(segment)
+    position = 0.5 if highest == lowest else (closes[-1] - lowest) / (highest - lowest)
+    if position < 0.2:
+        label = "相對低點區"
+    elif position > 0.8:
+        label = "相對高點區"
+    else:
+        label = "區間中段"
+    return {"position": position, "label": label}
+
+
+def divergence_flag(
+    gold_by_date: dict[str, float], fx_by_date: dict[str, float], window: int = 5
+) -> dict[str, int | bool]:
+    """比對金價與美元最近 window 天的漲跌方向；正常應多為反向，同向天數 >=3 視為背離旗標。"""
+    common_dates = sorted(set(gold_by_date) & set(fx_by_date))
+    recent_dates = common_dates[-(window + 1) :]
+    same_direction_days = 0
+    checked_days = 0
+    for i in range(1, len(recent_dates)):
+        prev_date, curr_date = recent_dates[i - 1], recent_dates[i]
+        gold_change = gold_by_date[curr_date] - gold_by_date[prev_date]
+        fx_change = fx_by_date[curr_date] - fx_by_date[prev_date]
+        if gold_change == 0 or fx_change == 0:
+            continue
+        checked_days += 1
+        if (gold_change > 0) == (fx_change > 0):
+            same_direction_days += 1
+    return {
+        "same_direction_days": same_direction_days,
+        "checked_days": checked_days,
+        "is_divergent": same_direction_days >= 3,
+    }

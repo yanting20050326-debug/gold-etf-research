@@ -139,3 +139,59 @@ def test_render_html_includes_price_charts():
     assert "renderSparkline(target.chart" in html
     assert "renderSparkline(goldPoints" in html
     assert "renderSparkline(fxPoints" in html
+
+
+def test_build_payload_includes_new_indicators_and_divergence():
+    bars = _sample_bars()
+    dates = [f"2026-08-{d:02d}" for d in range(15, 21)]
+    macro_gold = MacroSeries(
+        symbol="GC=F",
+        points=[PricePoint(d, 2000.0 + i) for i, d in enumerate(dates)],
+        as_of=dates[-1],
+        stale=False,
+    )
+    macro_fx = MacroSeries(
+        symbol="USDTWD=X",
+        points=[PricePoint(d, 31.0 + i * 0.1) for i, d in enumerate(dates)],
+        as_of=dates[-1],
+        stale=False,
+    )
+    payload = build_payload(
+        bars, macro_gold, macro_fx, datetime(2026, 8, 20, tzinfo=UTC)
+    )
+
+    target_indicators = payload["targets"]["00635U"]["indicators"]
+    assert target_indicators["volatility_squeeze"]["ratio"] is not None
+    assert target_indicators["relative_position"]["label"] in (
+        "相對低點區",
+        "區間中段",
+        "相對高點區",
+    )
+    divergence = payload["macro_context"]["divergence"]
+    assert divergence["checked_days"] == 5
+    assert divergence["same_direction_days"] == 5  # both series rise every day here
+    assert divergence["is_divergent"] is True
+
+
+def test_render_html_includes_new_indicator_cards_and_divergence():
+    bars = _sample_bars()
+    macro_gold = MacroSeries(
+        symbol="GC=F",
+        points=[PricePoint("2026-08-20", 2050.0)],
+        as_of="2026-08-20",
+        stale=False,
+    )
+    macro_fx = MacroSeries(
+        symbol="USDTWD=X",
+        points=[PricePoint("2026-08-20", 31.5)],
+        as_of="2026-08-20",
+        stale=False,
+    )
+    payload = build_payload(
+        bars, macro_gold, macro_fx, datetime(2026, 8, 20, tzinfo=UTC)
+    )
+    html = render_html(payload)
+
+    assert 'indicatorCard("volatility_squeeze"' in html
+    assert 'indicatorCard("relative_position"' in html
+    assert "macro.divergence" in html

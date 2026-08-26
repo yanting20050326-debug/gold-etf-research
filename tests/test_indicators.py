@@ -2,10 +2,13 @@ import pytest
 
 from gold_research.indicators import (
     bollinger_bands,
+    divergence_flag,
     exponential_moving_average,
     macd,
+    relative_position,
     relative_strength_index,
     simple_moving_average,
+    volatility_squeeze,
 )
 
 
@@ -82,3 +85,90 @@ def test_macd_returns_full_length_lists():
     assert len(result["macd"]) == len(closes)
     assert len(result["signal"]) == len(closes)
     assert len(result["histogram"]) == len(closes)
+
+
+def test_volatility_squeeze_flags_compression():
+    # 前 16 個收盤價有明顯波動，最後 6 個完全持平 -> 近 5 日報酬標準差恰為 0。
+    volatile = [90, 95, 88, 93, 85, 92, 87, 94, 89, 96, 84, 91, 86, 93, 88, 95]
+    flat = [100, 100, 100, 100, 100, 100]
+    closes = volatile + flat
+    result = volatility_squeeze(closes, short_window=5, long_window=20)
+    assert result["short_vol"] == pytest.approx(0.0)
+    assert result["long_vol"] > 0
+    assert result["ratio"] == pytest.approx(0.0)
+    assert result["is_compressed"] is True
+
+
+def test_volatility_squeeze_not_compressed_when_ratio_near_one():
+    closes = [100.0]
+    for i in range(24):
+        closes.append(closes[-1] + (2 if i % 2 == 0 else -2))
+    result = volatility_squeeze(closes, short_window=5, long_window=20)
+    assert result["ratio"] == pytest.approx(1.0, abs=0.15)
+    assert result["is_compressed"] is False
+
+
+def test_volatility_squeeze_insufficient_data():
+    result = volatility_squeeze([100.0] * 10, short_window=5, long_window=20)
+    assert result == {
+        "short_vol": None,
+        "long_vol": None,
+        "ratio": None,
+        "is_compressed": False,
+    }
+
+
+def test_relative_position_mid_range():
+    result = relative_position([10, 12, 8, 15, 11], window=5)
+    assert result["position"] == pytest.approx(3 / 7)
+    assert result["label"] == "區間中段"
+
+
+def test_relative_position_low_and_high_labels():
+    low = relative_position([10, 50, 50, 50, 8], window=5)
+    assert low["position"] == pytest.approx(0.0)
+    assert low["label"] == "相對低點區"
+
+    high = relative_position([10, 10, 10, 10, 50], window=5)
+    assert high["position"] == pytest.approx(1.0)
+    assert high["label"] == "相對高點區"
+
+
+def test_relative_position_insufficient_data():
+    assert relative_position([1, 2, 3], window=5) is None
+
+
+def test_divergence_flag_detects_majority_same_direction():
+    dates = [f"2026-08-{d:02d}" for d in range(1, 7)]
+    gold_by_date = dict(zip(dates, [100, 102, 101, 103, 102, 104]))
+    fx_by_date = dict(zip(dates, [30, 31, 30, 31, 32, 31]))
+    result = divergence_flag(gold_by_date, fx_by_date, window=5)
+    assert result == {
+        "same_direction_days": 3,
+        "checked_days": 5,
+        "is_divergent": True,
+    }
+
+
+def test_divergence_flag_not_divergent_when_mostly_opposite():
+    dates = [f"2026-08-{d:02d}" for d in range(1, 7)]
+    gold_by_date = dict(zip(dates, [100, 102, 101, 103, 102, 104]))
+    fx_by_date = dict(zip(dates, [30, 31, 32, 33, 34, 33]))
+    result = divergence_flag(gold_by_date, fx_by_date, window=5)
+    assert result == {
+        "same_direction_days": 2,
+        "checked_days": 5,
+        "is_divergent": False,
+    }
+
+
+def test_divergence_flag_excludes_zero_change_days():
+    dates = ["2026-08-01", "2026-08-02", "2026-08-03"]
+    gold_by_date = dict(zip(dates, [100, 100, 105]))
+    fx_by_date = dict(zip(dates, [30, 31, 32]))
+    result = divergence_flag(gold_by_date, fx_by_date, window=5)
+    assert result == {
+        "same_direction_days": 1,
+        "checked_days": 1,
+        "is_divergent": False,
+    }
