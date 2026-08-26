@@ -269,6 +269,33 @@ function updateTabActiveState() {
   });
 }
 
+let currentHorizon = "short";
+
+function renderHorizonTabs(card) {
+  const bar = el("div", { className: "tab-bar horizon-tab-bar" });
+  const options = [
+    { key: "short", label: "短線" },
+    { key: "long", label: "長線" },
+  ];
+  options.forEach((opt) => {
+    const btn = el("button", { className: "tab-button", textContent: opt.label });
+    btn.dataset.horizon = opt.key;
+    if (opt.key === currentHorizon) btn.classList.add("active");
+    btn.addEventListener("click", () => {
+      currentHorizon = opt.key;
+      renderTarget(currentTargetCode);
+      updateMacroVisibility();
+    });
+    bar.appendChild(btn);
+  });
+  card.appendChild(bar);
+}
+
+function updateMacroVisibility() {
+  const macroCard = document.getElementById("macro-card");
+  macroCard.style.display = currentHorizon === "long" ? "" : "none";
+}
+
 function renderTarget(code) {
   currentTargetCode = code;
   const target = SITE_DATA.targets[code];
@@ -279,17 +306,22 @@ function renderTarget(code) {
   card.appendChild(heading);
   card.appendChild(el("p", { textContent: target.asset_class_note }));
   card.appendChild(el("p", { textContent: "最新收盤：" + fmt(target.latest.close, 2) + "（" + target.latest.trading_date + "）" }));
+  renderHorizonTabs(card);
+  card.appendChild(el("p", { className: "source-note", textContent: currentHorizon === "short" ? "短線：技術面擇時指標（RSI／布林通道／波動壓縮／區間位置）" : "長線：趨勢與總體面（MA／MACD，下方另有國際金價、匯率、背離旗標）" }));
   const grid = el("div", { className: "indicator-grid" });
-  grid.appendChild(indicatorCard("ma20", "MA20", fmt(target.indicators.ma20, 2)));
-  grid.appendChild(indicatorCard("rsi14", "RSI14", fmt(target.indicators.rsi14, 2)));
-  grid.appendChild(indicatorCard("bollinger", "布林通道", fmt(target.indicators.bollinger.lower, 2) + " ~ " + fmt(target.indicators.bollinger.upper, 2)));
-  grid.appendChild(indicatorCard("macd", "MACD", fmt(target.indicators.macd.macd, 4) + " / 訊號線 " + fmt(target.indicators.macd.signal, 4)));
-  const vs = target.indicators.volatility_squeeze;
-  const vsText = vs.ratio === null ? "資料不足" : fmt(vs.ratio, 2) + (vs.is_compressed ? "（壓縮中）" : "");
-  grid.appendChild(indicatorCard("volatility_squeeze", "波動壓縮比", vsText));
-  const rp = target.indicators.relative_position;
-  const rpText = rp === null ? "資料不足" : fmt(rp.position * 100, 0) + "%（" + rp.label + "）";
-  grid.appendChild(indicatorCard("relative_position", "區間位置", rpText));
+  if (currentHorizon === "short") {
+    grid.appendChild(indicatorCard("rsi14", "RSI14", fmt(target.indicators.rsi14, 2)));
+    grid.appendChild(indicatorCard("bollinger", "布林通道", fmt(target.indicators.bollinger.lower, 2) + " ~ " + fmt(target.indicators.bollinger.upper, 2)));
+    const vs = target.indicators.volatility_squeeze;
+    const vsText = vs.ratio === null ? "資料不足" : fmt(vs.ratio, 2) + (vs.is_compressed ? "（壓縮中）" : "");
+    grid.appendChild(indicatorCard("volatility_squeeze", "波動壓縮比", vsText));
+    const rp = target.indicators.relative_position;
+    const rpText = rp === null ? "資料不足" : fmt(rp.position * 100, 0) + "%（" + rp.label + "）";
+    grid.appendChild(indicatorCard("relative_position", "區間位置", rpText));
+  } else {
+    grid.appendChild(indicatorCard("ma20", "MA20", fmt(target.indicators.ma20, 2)));
+    grid.appendChild(indicatorCard("macd", "MACD", fmt(target.indicators.macd.macd, 4) + " / 訊號線 " + fmt(target.indicators.macd.signal, 4)));
+  }
   card.appendChild(grid);
   if (target.chart && target.chart.length > 1) {
     card.appendChild(el("p", { textContent: "近 " + target.chart.length + " 個交易日走勢：" }));
@@ -357,6 +389,7 @@ renderTargetTabs();
 renderTarget(Object.keys(SITE_DATA.targets)[0]);
 renderMacro();
 renderCandidates();
+updateMacroVisibility();
 </script>
 </body>
 </html>

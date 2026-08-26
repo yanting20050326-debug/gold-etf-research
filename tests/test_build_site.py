@@ -195,3 +195,36 @@ def test_render_html_includes_new_indicator_cards_and_divergence():
     assert 'indicatorCard("volatility_squeeze"' in html
     assert 'indicatorCard("relative_position"' in html
     assert "macro.divergence" in html
+
+
+def test_render_html_splits_indicators_by_horizon_tab():
+    bars = _sample_bars()
+    macro_gold = MacroSeries(
+        symbol="GC=F",
+        points=[PricePoint("2026-08-20", 2050.0)],
+        as_of="2026-08-20",
+        stale=False,
+    )
+    macro_fx = MacroSeries(
+        symbol="USDTWD=X",
+        points=[PricePoint("2026-08-20", 31.5)],
+        as_of="2026-08-20",
+        stale=False,
+    )
+    payload = build_payload(
+        bars, macro_gold, macro_fx, datetime(2026, 8, 20, tzinfo=UTC)
+    )
+    html = render_html(payload)
+
+    # Short-horizon cards.
+    assert 'indicatorCard("rsi14"' in html
+    assert 'indicatorCard("bollinger"' in html
+    assert 'indicatorCard("volatility_squeeze"' in html
+    assert 'indicatorCard("relative_position"' in html
+    # Long-horizon cards.
+    assert 'indicatorCard("ma20"' in html
+    assert 'indicatorCard("macd"' in html
+    # The horizon-tab mechanism and macro-card visibility toggle itself.
+    assert "renderHorizonTabs" in html
+    assert 'currentHorizon === "short"' in html
+    assert "updateMacroVisibility" in html
