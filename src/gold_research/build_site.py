@@ -55,6 +55,7 @@ TARGET_META = {
         ),
         "badge": "商品／避險資產，非股票型ETF",
         "pullback_scale": 1.0,
+        "supports_long_horizon": True,
     },
     "00708L": {
         "display_name": "期元大S&P黃金正2",
@@ -65,6 +66,7 @@ TARGET_META = {
         ),
         "badge": "2倍槓桿，僅適合短線",
         "pullback_scale": 2.0,
+        "supports_long_horizon": False,
     },
 }
 
@@ -213,6 +215,7 @@ def _build_twse_target(
         "asset_class_note": meta["asset_class_note"],
         "badge": meta["badge"],
         "pullback_scale": pullback_scale,
+        "supports_long_horizon": meta.get("supports_long_horizon", True),
         "data_source": {"name": "TWSE STOCK_DAY", "as_of": latest_bar.trading_date},
         "latest": _build_latest(
             latest_bar.trading_date, latest_bar.close, latest_bar.volume, realtime
@@ -282,6 +285,7 @@ def _build_intl_gold_target(
         "asset_class_note": INTL_GOLD_META["asset_class_note"],
         "badge": INTL_GOLD_META["badge"],
         "pullback_scale": 1.0,
+        "supports_long_horizon": True,
         "data_source": {"name": "Yahoo Finance (GC=F)", "as_of": as_of},
         "latest": _build_latest(latest_point.date, latest_point.close, None, realtime),
         "indicators": indicators,
@@ -675,7 +679,11 @@ function updateTabActiveState() {
 
 let currentHorizon = "short";
 
-function renderHorizonTabs(card) {
+function renderHorizonTabs(card, target) {
+  if (!target.supports_long_horizon) {
+    card.appendChild(el("p", { className: "source-note", textContent: "此標的僅適合短線操作，固定顯示短線指標，不提供長線分頁。" }));
+    return;
+  }
   const bar = el("div", { className: "tab-bar horizon-tab-bar" });
   const options = [
     { key: "short", label: "短線" },
@@ -703,6 +711,7 @@ function updateMacroVisibility() {
 function renderTarget(code) {
   currentTargetCode = code;
   const target = SITE_DATA.targets[code];
+  if (!target.supports_long_horizon) currentHorizon = "short";
   const card = document.getElementById("target-card");
   card.innerHTML = "";
   const heading = el("h2", { textContent: target.display_name + " (" + target.code + ") " });
@@ -724,8 +733,10 @@ function renderTarget(code) {
   if (scoreNode) card.appendChild(scoreNode);
   const aiSummaryNode = renderAiSummary(target);
   if (aiSummaryNode) card.appendChild(aiSummaryNode);
-  renderHorizonTabs(card);
-  card.appendChild(el("p", { className: "source-note", textContent: currentHorizon === "short" ? "短線：技術面擇時指標（RSI／布林通道／波動壓縮／區間位置）" : "長線：趨勢與總體面（MA／MACD，下方另有匯率、背離旗標）" }));
+  renderHorizonTabs(card, target);
+  if (target.supports_long_horizon) {
+    card.appendChild(el("p", { className: "source-note", textContent: currentHorizon === "short" ? "短線：技術面擇時指標（RSI／布林通道／波動壓縮／區間位置）" : "長線：趨勢與總體面（MA／MACD，下方另有匯率、背離旗標）" }));
+  }
   card.appendChild(renderDisciplineCard(target));
   const grid = el("div", { className: "indicator-grid" });
   if (currentHorizon === "short") {

@@ -117,9 +117,14 @@ def test_build_payload_includes_multiple_twse_targets_and_intl_gold():
     # should be doubled relative to the unleveraged 00635U and XAUUSD.
     assert payload["targets"]["00635U"]["pullback_scale"] == 1.0
     assert payload["targets"]["00708L"]["pullback_scale"] == 2.0
+    # 00708L is explicitly "僅適合短線操作" (short-term only), so it
+    # shouldn't offer a long-horizon view at all.
+    assert payload["targets"]["00635U"]["supports_long_horizon"] is True
+    assert payload["targets"]["00708L"]["supports_long_horizon"] is False
     intl_gold = payload["targets"]["XAUUSD"]
     assert intl_gold["asset_class"] == "commodity_spot"
     assert intl_gold["pullback_scale"] == 1.0
+    assert intl_gold["supports_long_horizon"] is True
     # 6 macro fixture points isn't enough for the 30-day relative_position
     # window; it's expected to be None, not the schema key being missing.
     assert "relative_position" in intl_gold["indicators"]
