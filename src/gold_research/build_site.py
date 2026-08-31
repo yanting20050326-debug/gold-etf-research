@@ -398,6 +398,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .indicator-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-top: 12px; }
   .indicator { background: var(--stat-bg); border: 1px solid var(--border); padding: 12px 14px; border-radius: 8px; cursor: pointer; }
   .indicator-summary { font-weight: 700; }
+  .indicator-signal { margin-top: 6px; font-size: 12px; color: var(--text-secondary); }
   .indicator-detail { margin-top: 8px; font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
   .tab-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
   .tab-button { background: var(--card-bg); color: var(--text-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; cursor: pointer; font-size: 15px; font-weight: 700; font-family: inherit; }
@@ -526,6 +527,15 @@ function stageSignalInfo(stage, signals) {
   return null;
 }
 
+function signalBadgeParagraph(label, value) {
+  const badgeText = value === true ? "✓ 符合" : value === false ? "✗ 尚未符合" : "資料不足";
+  const badgeClass = value === true ? "badge badge-ok" : value === false ? "badge badge-warn" : "badge";
+  const p = el("p", { className: "indicator-signal" });
+  p.appendChild(document.createTextNode(label + "："));
+  p.appendChild(el("span", { className: badgeClass, textContent: badgeText }));
+  return p;
+}
+
 function renderDisciplineCard(target) {
   const wrap = el("div", { className: "discipline-card" });
   wrap.appendChild(el("h3", { textContent: "核心交易紀律（個人參考，非自動訊號）" }));
@@ -539,12 +549,7 @@ function renderDisciplineCard(target) {
     }));
     const signalInfo = stageSignalInfo(ps.stage, target.indicators.stage_signals);
     if (signalInfo) {
-      const badgeText = signalInfo.value === true ? "✓ 符合" : signalInfo.value === false ? "✗ 尚未符合" : "資料不足";
-      const badgeClass = signalInfo.value === true ? "badge badge-ok" : signalInfo.value === false ? "badge badge-warn" : "badge";
-      const condP = el("p", {});
-      condP.appendChild(document.createTextNode(signalInfo.label + "："));
-      condP.appendChild(el("span", { className: badgeClass, textContent: badgeText }));
-      wrap.appendChild(condP);
+      wrap.appendChild(signalBadgeParagraph(signalInfo.label, signalInfo.value));
     }
   } else {
     wrap.appendChild(el("p", { className: "source-note", textContent: "資料不足，無法計算目前回檔幅度。" }));
@@ -739,8 +744,9 @@ function renderTarget(code) {
   }
   card.appendChild(renderDisciplineCard(target));
   const grid = el("div", { className: "indicator-grid" });
+  const signals = target.indicators.stage_signals;
   if (currentHorizon === "short") {
-    grid.appendChild(indicatorCard("rsi14", "RSI14", fmt(target.indicators.rsi14, 2)));
+    grid.appendChild(indicatorCard("rsi14", "RSI14", fmt(target.indicators.rsi14, 2), signals ? signalBadgeParagraph("止跌判斷（RSI回升+近3天無新低）", signals.momentum_stabilizing) : null));
     grid.appendChild(indicatorCard("bollinger", "布林通道", fmt(target.indicators.bollinger.lower, 2) + " ~ " + fmt(target.indicators.bollinger.upper, 2)));
     const vs = target.indicators.volatility_squeeze;
     const vsText = vs.ratio === null ? "資料不足" : fmt(vs.ratio, 2) + (vs.is_compressed ? "（壓縮中）" : "");
@@ -749,8 +755,8 @@ function renderTarget(code) {
     const rpText = rp === null ? "資料不足" : fmt(rp.position * 100, 0) + "%（" + rp.label + "）";
     grid.appendChild(indicatorCard("relative_position", "區間位置", rpText, renderPositionGauge(rp)));
   } else {
-    grid.appendChild(indicatorCard("ma20", "MA20", fmt(target.indicators.ma20, 2)));
-    grid.appendChild(indicatorCard("macd", "MACD", fmt(target.indicators.macd.macd, 4) + " / 訊號線 " + fmt(target.indicators.macd.signal, 4)));
+    grid.appendChild(indicatorCard("ma20", "MA20", fmt(target.indicators.ma20, 2), signals ? signalBadgeParagraph("趨勢沒壞判斷（站上MA20+未破前低）", signals.trend_intact) : null));
+    grid.appendChild(indicatorCard("macd", "MACD", fmt(target.indicators.macd.macd, 4) + " / 訊號線 " + fmt(target.indicators.macd.signal, 4), signals ? signalBadgeParagraph("重新轉強判斷（MACD黃金交叉）", signals.macd_golden_cross) : null));
   }
   card.appendChild(grid);
   if (target.chart && target.chart.length > 1) {
