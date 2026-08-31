@@ -345,6 +345,7 @@ def build_payload(
         "generated_at": generated_at.isoformat(),
         "disclaimer": DISCLAIMER,
         "auto_refresh_seconds": 60,
+        "live_refresh_seconds": 15,
         "targets": targets,
         "macro_context": {
             "data_source": {"name": "Yahoo Finance", "as_of": macro_fx.as_of},
@@ -771,12 +772,33 @@ function refreshSiteData() {
     .catch(() => {});
 }
 
+function refreshLiveQuotes() {
+  fetch("data/live_quotes.json?ts=" + Date.now())
+    .then((res) => (res.ok ? res.json() : null))
+    .then((fresh) => {
+      if (!fresh || !fresh.quotes) return;
+      let changed = false;
+      Object.keys(fresh.quotes).forEach((code) => {
+        const target = SITE_DATA.targets[code];
+        if (target) {
+          Object.assign(target.latest, fresh.quotes[code]);
+          changed = true;
+        }
+      });
+      if (changed && currentTargetCode) renderTarget(currentTargetCode);
+    })
+    .catch(() => {});
+}
+
 renderDisclaimer();
 renderTargetTabs();
 renderTarget(Object.keys(SITE_DATA.targets)[0]);
 renderMacro();
 if (SITE_DATA.auto_refresh_seconds) {
   setInterval(refreshSiteData, SITE_DATA.auto_refresh_seconds * 1000);
+}
+if (SITE_DATA.live_refresh_seconds) {
+  setInterval(refreshLiveQuotes, SITE_DATA.live_refresh_seconds * 1000);
 }
 </script>
 </body>

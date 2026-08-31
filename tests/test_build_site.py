@@ -88,6 +88,7 @@ def test_build_payload_has_expected_schema():
 
     assert payload["disclaimer"]
     assert payload["auto_refresh_seconds"] == 60
+    assert payload["live_refresh_seconds"] == 15
     target = payload["targets"]["00635U"]
     assert target["asset_class"] == "commodity_futures_etf"
     assert target["indicators"]["ma20"] is not None
@@ -341,6 +342,9 @@ def test_render_html_includes_position_gauge_and_auto_refresh():
     assert "gauge-track" in html
     assert "refreshSiteData" in html
     assert "SITE_DATA.auto_refresh_seconds" in html
+    assert "refreshLiveQuotes" in html
+    assert "SITE_DATA.live_refresh_seconds" in html
+    assert "data/live_quotes.json" in html
 
 
 def test_build_payload_includes_technical_score():
