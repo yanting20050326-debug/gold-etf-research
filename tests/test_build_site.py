@@ -363,7 +363,7 @@ def test_render_html_includes_score_panel_and_realtime_price():
     assert "live-dot" in html
 
 
-def test_build_payload_omits_ai_summary_without_api_key(monkeypatch):
+def test_build_payload_omits_ai_summary_without_api_key(monkeypatch, tmp_path):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     macro_gold, macro_fx = _sample_macro()
     payload = build_payload(
@@ -371,6 +371,7 @@ def test_build_payload_omits_ai_summary_without_api_key(monkeypatch):
         macro_gold,
         macro_fx,
         datetime(2026, 8, 20, tzinfo=UTC),
+        cache_dir=tmp_path,
     )
     assert payload["targets"]["00635U"]["ai_summary"] is None
 
