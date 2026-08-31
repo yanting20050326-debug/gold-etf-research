@@ -155,9 +155,14 @@ _STAGE_HINTS = {
 
 
 def pullback_stage(
-    closes: list[float], window: int = 30
+    closes: list[float], window: int = 30, threshold_scale: float = 1.0
 ) -> dict[str, float | str] | None:
-    """近 window 天高點以來的回檔幅度，對照分批進場紀律標出目前處於哪個階段。"""
+    """近 window 天高點以來的回檔幅度，對照分批進場紀律標出目前處於哪個階段。
+
+    threshold_scale 讓槓桿標的可以套用等比例放大的門檻（例如 2 倍槓桿 ETF
+    用 threshold_scale=2.0），因為同樣的現貨漲跌幅度，槓桿標的的回檔百分比
+    大約會是現貨的對應倍數，用同一組門檻會太早觸發全部分批。
+    """
     if len(closes) < window:
         return None
     segment = closes[-window:]
@@ -166,13 +171,19 @@ def pullback_stage(
     pullback_pct = (
         0.0 if recent_high == 0 else (recent_high - current) / recent_high * 100
     )
-    if pullback_pct < 3:
+    t1, t2, t3, t4 = (
+        3 * threshold_scale,
+        4 * threshold_scale,
+        6 * threshold_scale,
+        9 * threshold_scale,
+    )
+    if pullback_pct < t1:
         stage = "觀察區（尚未回檔到位）"
-    elif pullback_pct < 4:
+    elif pullback_pct < t2:
         stage = "第一筆 20%"
-    elif pullback_pct < 6:
+    elif pullback_pct < t3:
         stage = "加碼 20%（前提：趨勢沒壞）"
-    elif pullback_pct < 9:
+    elif pullback_pct < t4:
         stage = "加碼 20%（前提：出現止跌）"
     else:
         stage = "最後 40%（等重新轉強）"

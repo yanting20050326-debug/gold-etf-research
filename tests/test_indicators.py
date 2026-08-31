@@ -191,6 +191,33 @@ def test_pullback_stage_all_zone_boundaries():
     assert pullback_stage(make(12))["stage"] == "最後 40%（等重新轉強）"
 
 
+def test_pullback_stage_threshold_scale_doubles_boundaries_for_leveraged_targets():
+    def make(pullback_target_pct):
+        high = 100.0
+        current = high * (1 - pullback_target_pct / 100)
+        return [high] * 29 + [current]
+
+    # A 2x-leveraged product should need roughly twice the pullback % to hit
+    # the same stage as its unleveraged counterpart.
+    assert (
+        pullback_stage(make(5), threshold_scale=2.0)["stage"]
+        == "觀察區（尚未回檔到位）"
+    )
+    assert pullback_stage(make(7), threshold_scale=2.0)["stage"] == "第一筆 20%"
+    assert (
+        pullback_stage(make(10), threshold_scale=2.0)["stage"]
+        == "加碼 20%（前提：趨勢沒壞）"
+    )
+    assert (
+        pullback_stage(make(15), threshold_scale=2.0)["stage"]
+        == "加碼 20%（前提：出現止跌）"
+    )
+    assert (
+        pullback_stage(make(20), threshold_scale=2.0)["stage"]
+        == "最後 40%（等重新轉強）"
+    )
+
+
 def test_pullback_stage_insufficient_data():
     assert pullback_stage([100.0] * 10, window=30) is None
 

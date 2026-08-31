@@ -113,8 +113,13 @@ def test_build_payload_includes_multiple_twse_targets_and_intl_gold():
 
     assert set(payload["targets"].keys()) == {"00635U", "00708L", "XAUUSD"}
     assert payload["targets"]["00708L"]["asset_class"] == "leveraged_futures_etf"
+    # 00708L is a 2x-leveraged product, so its pullback-stage thresholds
+    # should be doubled relative to the unleveraged 00635U and XAUUSD.
+    assert payload["targets"]["00635U"]["pullback_scale"] == 1.0
+    assert payload["targets"]["00708L"]["pullback_scale"] == 2.0
     intl_gold = payload["targets"]["XAUUSD"]
     assert intl_gold["asset_class"] == "commodity_spot"
+    assert intl_gold["pullback_scale"] == 1.0
     # 6 macro fixture points isn't enough for the 30-day relative_position
     # window; it's expected to be None, not the schema key being missing.
     assert "relative_position" in intl_gold["indicators"]
@@ -312,7 +317,8 @@ def test_render_html_includes_discipline_card():
     html = render_html(payload)
 
     assert "renderDisciplineCard(target)" in html
-    assert "回檔 3～4% 開始第一筆 20%" in html
+    assert "disciplineRules(scale)" in html
+    assert "開始第一筆 20%。" in html
     assert "不要無限攤平" in html
     assert "buy-hint" in html
     assert '"提示：" + ps.hint' in html

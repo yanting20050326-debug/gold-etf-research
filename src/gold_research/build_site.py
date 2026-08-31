@@ -54,6 +54,7 @@ TARGET_META = {
             "不是公司基本面驅動；MA/RSI/布林/MACD 是通用技術工具，解讀方式跟股票型ETF不同。"
         ),
         "badge": "商品／避險資產，非股票型ETF",
+        "pullback_scale": 1.0,
     },
     "00708L": {
         "display_name": "期元大S&P黃金正2",
@@ -63,6 +64,7 @@ TARGET_META = {
             "長期持有會因複利效應偏離原型指數，不建議當作定期定額標的。"
         ),
         "badge": "2倍槓桿，僅適合短線",
+        "pullback_scale": 2.0,
     },
 }
 
@@ -90,7 +92,7 @@ SITE_DIR = PROJECT_ROOT / "site"
 DATA_CACHE_DIR = PROJECT_ROOT / "data_cache"
 
 
-def _compute_indicators(closes: list[float]) -> dict:
+def _compute_indicators(closes: list[float], pullback_scale: float = 1.0) -> dict:
     sma20 = simple_moving_average(closes, 20)
     rsi14 = relative_strength_index(closes, 14)
     bands = bollinger_bands(closes, 20, 2.0)
@@ -111,7 +113,7 @@ def _compute_indicators(closes: list[float]) -> dict:
         },
         "volatility_squeeze": volatility_squeeze(closes, 5, 20),
         "relative_position": relative_position(closes, 30),
-        "pullback_stage": pullback_stage(closes, 30),
+        "pullback_stage": pullback_stage(closes, 30, threshold_scale=pullback_scale),
         "prior_low": prior_low,
         "technical_score": technical_score(
             close=closes[-1],
@@ -185,7 +187,8 @@ def _build_twse_target(
     meta = TARGET_META[code]
     closes = [bar.close for bar in bars]
     latest_bar = bars[-1]
-    indicators = _compute_indicators(closes)
+    pullback_scale = meta.get("pullback_scale", 1.0)
+    indicators = _compute_indicators(closes, pullback_scale=pullback_scale)
     own_change_pct = _pct_change(
         bars[-2].close if len(bars) >= 2 else None, latest_bar.close
     )
@@ -209,6 +212,7 @@ def _build_twse_target(
         "asset_class": meta["asset_class"],
         "asset_class_note": meta["asset_class_note"],
         "badge": meta["badge"],
+        "pullback_scale": pullback_scale,
         "data_source": {"name": "TWSE STOCK_DAY", "as_of": latest_bar.trading_date},
         "latest": _build_latest(
             latest_bar.trading_date, latest_bar.close, latest_bar.volume, realtime
@@ -277,6 +281,7 @@ def _build_intl_gold_target(
         "asset_class": INTL_GOLD_META["asset_class"],
         "asset_class_note": INTL_GOLD_META["asset_class_note"],
         "badge": INTL_GOLD_META["badge"],
+        "pullback_scale": 1.0,
         "data_source": {"name": "Yahoo Finance (GC=F)", "as_of": as_of},
         "latest": _build_latest(latest_point.date, latest_point.close, None, realtime),
         "indicators": indicators,
@@ -487,18 +492,21 @@ function renderSparkline(points, color) {
   return svg;
 }
 
-const DISCIPLINE_RULES = [
-  "只做中期多頭的黃金。",
-  "不在暴漲創高時追價。",
-  "回檔 3～4% 開始第一筆 20%。",
-  "回檔 4～6%，趨勢沒壞（收盤價在 MA20 之上且未跌破起漲前低）再加 20%。",
-  "6～9% 區間出現止跌（RSI14 比 3 天前回升且未創近 3 天新低），再加 20%。",
-  "最後 40% 一定等重新轉強（MACD 出現黃金交叉）。",
-  "跌破重要前低（起漲低點），立即停止加碼。",
-  "不要無限攤平。",
-  "+5%、+8%、+10～12% 分批獲利。",
-  "剩餘 40% 讓趨勢決定出場。",
-];
+function disciplineRules(scale) {
+  const t1 = 3 * scale, t2 = 4 * scale, t3 = 6 * scale, t4 = 9 * scale;
+  return [
+    "只做中期多頭的黃金。",
+    "不在暴漲創高時追價。",
+    "回檔 " + t1 + "～" + t2 + "% 開始第一筆 20%。",
+    "回檔 " + t2 + "～" + t3 + "%，趨勢沒壞（收盤價在 MA20 之上且未跌破起漲前低）再加 20%。",
+    t3 + "～" + t4 + "% 區間出現止跌（RSI14 比 3 天前回升且未創近 3 天新低），再加 20%。",
+    "最後 40% 一定等重新轉強（MACD 出現黃金交叉）。",
+    "跌破重要前低（起漲低點），立即停止加碼。",
+    "不要無限攤平。",
+    "+5%、+8%、+10～12% 分批獲利。",
+    "剩餘 40% 讓趨勢決定出場。",
+  ];
+}
 
 function stageSignalInfo(stage, signals) {
   if (!signals) return null;
@@ -545,8 +553,12 @@ function renderDisciplineCard(target) {
   } else {
     wrap.appendChild(el("p", { className: "source-note", textContent: "資料不足，暫時抓不到明確的起漲前低。" }));
   }
+  const scale = target.pullback_scale || 1;
+  if (scale !== 1) {
+    wrap.appendChild(el("p", { className: "source-note", textContent: "此標的為 " + scale + " 倍槓桿，以下回檔門檻已按 " + scale + " 倍幅度計算，跟現貨標的不是同一組數字。" }));
+  }
   const list = el("ul", { className: "discipline-list" });
-  DISCIPLINE_RULES.forEach((rule) => {
+  disciplineRules(scale).forEach((rule) => {
     list.appendChild(el("li", { textContent: rule }));
   });
   wrap.appendChild(list);
