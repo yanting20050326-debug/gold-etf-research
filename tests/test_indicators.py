@@ -9,6 +9,7 @@ from gold_research.indicators import (
     relative_position,
     relative_strength_index,
     simple_moving_average,
+    synthetic_price_series,
     technical_score,
     volatility_squeeze,
 )
@@ -264,3 +265,37 @@ def test_divergence_flag_excludes_zero_change_days():
         "checked_days": 1,
         "is_divergent": False,
     }
+
+
+def test_synthetic_price_series_multiplies_matching_dates():
+    gold_by_date = {"2026-08-01": 2000.0, "2026-08-02": 2010.0, "2026-08-03": 2020.0}
+    fx_by_date = {"2026-08-01": 31.0, "2026-08-02": 31.5, "2026-08-03": 32.0}
+    result = synthetic_price_series(gold_by_date, fx_by_date)
+    assert result == [
+        pytest.approx(62000.0),
+        pytest.approx(63315.0),
+        pytest.approx(64640.0),
+    ]
+
+
+def test_synthetic_price_series_sorts_by_date_regardless_of_dict_order():
+    gold_by_date = {"2026-08-03": 2020.0, "2026-08-01": 2000.0, "2026-08-02": 2010.0}
+    fx_by_date = {"2026-08-02": 31.5, "2026-08-03": 32.0, "2026-08-01": 31.0}
+    result = synthetic_price_series(gold_by_date, fx_by_date)
+    assert result == [
+        pytest.approx(62000.0),
+        pytest.approx(63315.0),
+        pytest.approx(64640.0),
+    ]
+
+
+def test_synthetic_price_series_excludes_dates_missing_on_either_side():
+    gold_by_date = {"2026-08-01": 2000.0, "2026-08-02": 2010.0}
+    fx_by_date = {"2026-08-01": 31.0, "2026-08-03": 32.0}
+    result = synthetic_price_series(gold_by_date, fx_by_date)
+    assert result == [pytest.approx(62000.0)]
+
+
+def test_synthetic_price_series_empty_when_no_common_dates():
+    result = synthetic_price_series({"2026-08-01": 2000.0}, {"2026-08-02": 31.0})
+    assert result == []

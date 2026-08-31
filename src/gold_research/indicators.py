@@ -226,6 +226,14 @@ def technical_score(
     return {"scores": scores, "composite": composite, "label": label}
 
 
+def synthetic_price_series(
+    base_by_date: dict[str, float], multiplier_by_date: dict[str, float]
+) -> list[float]:
+    """依共同日期逐日相乘兩個序列（例如美元金價 x 美元兌台幣），依日期排序回傳。"""
+    common_dates = sorted(set(base_by_date) & set(multiplier_by_date))
+    return [base_by_date[d] * multiplier_by_date[d] for d in common_dates]
+
+
 def divergence_flag(
     gold_by_date: dict[str, float], fx_by_date: dict[str, float], window: int = 5
 ) -> dict[str, int | bool]:

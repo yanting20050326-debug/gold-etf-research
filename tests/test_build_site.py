@@ -1,6 +1,8 @@
 import json
 from datetime import UTC, datetime
 
+import pytest
+
 from gold_research.build_site import build_payload, render_html
 from gold_research.fetch_macro import LatestQuote, MacroSeries, PricePoint
 from gold_research.fetch_twse import DailyBar, RealtimeQuote
@@ -109,8 +111,53 @@ def test_build_payload_includes_multiple_twse_targets_and_intl_gold():
     # 6 macro fixture points isn't enough for the 30-day relative_position
     # window; it's expected to be None, not the schema key being missing.
     assert "relative_position" in intl_gold["indicators"]
-    assert intl_gold["passbook_note"]
     assert intl_gold["latest"]["close"] == macro_gold.points[-1].close
+    # Same 6-point shortage applies to the passbook estimate's own indicators,
+    # but a latest converted price should still be available.
+    passbook = intl_gold["passbook"]
+    assert passbook["relative_position"] is None
+    assert passbook["pullback_stage"] is None
+    expected_latest = (
+        macro_gold.points[-1].close * macro_fx.points[-1].close / 31.1034768
+    )
+    assert passbook["latest_price"] == pytest.approx(expected_latest)
+    assert passbook["note"]
+
+
+def test_intl_gold_passbook_estimate_computed_from_ntd_converted_series():
+    dates = [f"2026-08-{d:02d}" for d in range(1, 32)] + [
+        f"2026-09-{d:02d}" for d in range(1, 6)
+    ]
+    gold_closes = [2000.0 + i for i in range(len(dates))]  # steadily rising
+    fx_closes = [31.0] * len(dates)  # flat FX, so USD trend passes through
+    macro_gold = MacroSeries(
+        symbol="GC=F",
+        points=[PricePoint(d, c) for d, c in zip(dates, gold_closes)],
+        as_of=dates[-1],
+        stale=False,
+    )
+    macro_fx = MacroSeries(
+        symbol="USDTWD=X",
+        points=[PricePoint(d, c) for d, c in zip(dates, fx_closes)],
+        as_of=dates[-1],
+        stale=False,
+    )
+    payload = build_payload(
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 9, 5, tzinfo=UTC),
+    )
+    passbook = payload["targets"]["XAUUSD"]["passbook"]
+    expected_latest = gold_closes[-1] * fx_closes[-1] / 31.1034768
+    assert passbook["latest_price"] == pytest.approx(expected_latest)
+    assert passbook["unit"] == "NT$/公克（試算）"
+    # Flat FX and a steadily rising USD gold price mean the NTD series is also
+    # steadily rising, so today's close should sit at the top of its own
+    # 30-day range regardless of the ounce-to-gram scaling.
+    assert passbook["relative_position"]["position"] == pytest.approx(1.0)
+    assert passbook["pullback_stage"]["pullback_pct"] == pytest.approx(0.0)
+    assert passbook["technical_score"] is not None
 
 
 def test_build_payload_flags_stale_macro_context():

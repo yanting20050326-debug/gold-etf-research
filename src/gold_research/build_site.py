@@ -30,6 +30,7 @@ from gold_research.indicators import (
     relative_position,
     relative_strength_index,
     simple_moving_average,
+    synthetic_price_series,
     technical_score,
     volatility_squeeze,
 )
@@ -72,11 +73,12 @@ INTL_GOLD_META = {
 }
 
 GOLD_PASSBOOK_NOTE = (
-    "台灣銀行／兆豐銀行等黃金存摺沒有公開歷史報價 API，本站無法直接串接技術指標。"
-    "存摺價格通常貼著國際金價換算新台幣走，可用這裡的區間位置，"
-    "作為存摺現在算貴還是便宜的參考方向；實際牌價仍受銀行買賣價差影響，並非完全同步，"
-    "請以銀行公告牌價為準。"
+    "台灣銀行黃金存摺沒有公開歷史報價 API，這裡改用「國際金價 x 美元兌台幣」"
+    "換算成新台幣／公克的試算價格，估算存摺可能的相對位置與回檔階段；"
+    "實際牌價仍受銀行買賣價差、換匯時點影響，並非完全同步，請以銀行公告牌價為準。"
 )
+
+TROY_OUNCE_GRAMS = 31.1034768
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 SITE_DIR = PROJECT_ROOT / "site"
@@ -205,11 +207,33 @@ def _build_twse_target(
     }
 
 
+def _build_passbook_estimate(
+    gold_points: list[PricePoint], fx_points: list[PricePoint]
+) -> dict | None:
+    """把國際金價（美元／盎司）換算成新台幣／公克序列，估算存摺可能的相對位置。"""
+    gold_by_date = {p.date: p.close for p in gold_points}
+    fx_by_date = {p.date: p.close for p in fx_points}
+    usd_per_ounce = synthetic_price_series(gold_by_date, fx_by_date)
+    if not usd_per_ounce:
+        return None
+    ntd_per_gram = [price / TROY_OUNCE_GRAMS for price in usd_per_ounce]
+    indicators = _compute_indicators(ntd_per_gram)
+    return {
+        "unit": "NT$/公克（試算）",
+        "latest_price": ntd_per_gram[-1],
+        "relative_position": indicators["relative_position"],
+        "pullback_stage": indicators["pullback_stage"],
+        "technical_score": indicators["technical_score"],
+        "note": GOLD_PASSBOOK_NOTE,
+    }
+
+
 def _build_intl_gold_target(
     points: list[PricePoint],
     as_of: str,
     realtime: LatestQuote | None,
     usdtwd_change_pct: float | None,
+    fx_points: list[PricePoint],
     today: date,
     cache_dir: Path,
 ) -> dict:
@@ -243,7 +267,7 @@ def _build_intl_gold_target(
         "latest": _build_latest(latest_point.date, latest_point.close, None, realtime),
         "indicators": indicators,
         "chart": [{"trading_date": p.date, "close": p.close} for p in points],
-        "passbook_note": GOLD_PASSBOOK_NOTE,
+        "passbook": _build_passbook_estimate(points, fx_points),
         "ai_summary": _ai_summary_field(ai_summary),
     }
 
@@ -285,6 +309,7 @@ def build_payload(
             macro_gold.as_of,
             intl_gold_realtime,
             usdtwd_change_pct,
+            macro_fx.points,
             today,
             cache_dir,
         )
@@ -373,6 +398,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .discipline-list { margin: 8px 0 0; padding-left: 20px; font-size: 13px; line-height: 1.6; color: var(--text-secondary); }
   .buy-hint { background: #eff6ff; border: 1px solid #93c5fd; border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; }
   .buy-hint-text { font-weight: 700; color: #1e40af; margin: 0; }
+  .passbook-card { background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 14px 16px; margin: 12px 0; }
   a { color: var(--accent); }
 </style>
 </head>
@@ -480,6 +506,28 @@ function renderDisciplineCard(target) {
   });
   wrap.appendChild(list);
   wrap.appendChild(el("p", { className: "source-note", textContent: "回檔基準為近 30 天高點；趨勢是否轉強、止跌、跌破前低仍需自行判斷，本卡不做自動買賣訊號。獲利分批（+5%/+8%/+10~12%）需要你自己記錄進場價才能對照，本站不追蹤持倉。" }));
+  return wrap;
+}
+
+function renderPassbookEstimate(target) {
+  const pb = target.passbook;
+  if (!pb) return null;
+  const wrap = el("div", { className: "passbook-card" });
+  wrap.appendChild(el("h3", { textContent: "黃金存摺換算試算" }));
+  wrap.appendChild(el("p", { textContent: "試算價：" + fmt(pb.latest_price, 1) + " " + pb.unit }));
+  if (pb.pullback_stage) {
+    wrap.appendChild(el("p", {
+      textContent: "近 30 天高點 " + fmt(pb.pullback_stage.recent_high, 1) + "，目前回檔 " + fmt(pb.pullback_stage.pullback_pct, 1) + "%，對照存摺紀律大概落在：" + pb.pullback_stage.stage,
+    }));
+  } else if (pb.relative_position) {
+    wrap.appendChild(el("p", { textContent: "區間位置：" + fmt(pb.relative_position.position * 100, 0) + "%（" + pb.relative_position.label + "）" }));
+  } else {
+    wrap.appendChild(el("p", { className: "source-note", textContent: "資料不足，無法計算相對位置。" }));
+  }
+  if (pb.technical_score) {
+    wrap.appendChild(el("p", { textContent: "技術面：" + pb.technical_score.label + "（" + fmt(pb.technical_score.composite, 0) + " 分）" }));
+  }
+  wrap.appendChild(el("p", { className: "source-note", textContent: pb.note }));
   return wrap;
 }
 
@@ -613,9 +661,8 @@ function renderTarget(code) {
     priceLine.appendChild(document.createTextNode("最新收盤：" + fmt(target.latest.close, 2) + "（" + target.latest.trading_date + "，非即時）"));
   }
   card.appendChild(priceLine);
-  if (target.passbook_note) {
-    card.appendChild(el("p", { className: "source-note", textContent: target.passbook_note }));
-  }
+  const passbookNode = renderPassbookEstimate(target);
+  if (passbookNode) card.appendChild(passbookNode);
   const scoreNode = renderTechnicalScore(target);
   if (scoreNode) card.appendChild(scoreNode);
   const aiSummaryNode = renderAiSummary(target);
