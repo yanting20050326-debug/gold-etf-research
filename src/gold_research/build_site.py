@@ -70,15 +70,17 @@ TARGET_META = {
     },
 }
 
-INTL_GOLD_CODE = "XAUUSD"
+INTL_GOLD_CODE = "GCF"
 INTL_GOLD_META = {
     "display_name": "國際盤黃金（COMEX）",
-    "asset_class": "commodity_spot",
+    "asset_class": "commodity_futures",
     "asset_class_note": (
-        "國際現貨／期貨黃金報價（美元計價），是台灣黃金相關標的（00635U、00708L、"
-        "銀行黃金存摺）的共同定價基礎；本身無法在台灣交易所直接買賣。"
+        "追蹤COMEX黃金期貨（Yahoo Finance代碼GC=F），不是銀行間即期黃金報價（真正的"
+        "XAUUSD）；兩者走勢高度連動、價差通常很小，但不是同一個報價來源。是台灣黃金"
+        "相關標的（00635U、00708L、銀行黃金存摺）的共同定價基礎，本身無法在台灣交易所"
+        "直接買賣。"
     ),
-    "badge": "國際報價，非台股標的",
+    "badge": "COMEX期貨報價，非台股標的",
 }
 
 GOLD_PASSBOOK_NOTE = (

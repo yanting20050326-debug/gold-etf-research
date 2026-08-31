@@ -111,14 +111,14 @@ def test_build_payload_includes_multiple_twse_targets_and_intl_gold():
         datetime(2026, 8, 20, tzinfo=UTC),
     )
 
-    assert set(payload["targets"].keys()) == {"00635U", "00708L", "XAUUSD"}
+    assert set(payload["targets"].keys()) == {"00635U", "00708L", "GCF"}
     assert payload["targets"]["00708L"]["asset_class"] == "leveraged_futures_etf"
     # 00708L is a 2x-leveraged product, so its pullback-stage thresholds
-    # should be doubled relative to the unleveraged 00635U and XAUUSD.
+    # should be doubled relative to the unleveraged 00635U and GCF.
     assert payload["targets"]["00635U"]["pullback_scale"] == 1.0
     assert payload["targets"]["00708L"]["pullback_scale"] == 2.0
-    intl_gold = payload["targets"]["XAUUSD"]
-    assert intl_gold["asset_class"] == "commodity_spot"
+    intl_gold = payload["targets"]["GCF"]
+    assert intl_gold["asset_class"] == "commodity_futures"
     assert intl_gold["pullback_scale"] == 1.0
     # 6 macro fixture points isn't enough for the 30-day relative_position
     # window; it's expected to be None, not the schema key being missing.
@@ -160,7 +160,7 @@ def test_intl_gold_passbook_estimate_computed_from_ntd_converted_series():
         macro_fx,
         datetime(2026, 9, 5, tzinfo=UTC),
     )
-    passbook = payload["targets"]["XAUUSD"]["passbook"]
+    passbook = payload["targets"]["GCF"]["passbook"]
     expected_latest = gold_closes[-1] * fx_closes[-1] / 31.1034768
     assert passbook["latest_price"] == pytest.approx(expected_latest)
     assert passbook["unit"] == "NT$/公克（試算）"
@@ -185,7 +185,7 @@ def test_build_payload_flags_stale_macro_context():
     )
     assert payload["macro_context"]["stale"] is True
     # No gold points means no international-gold target can be built.
-    assert "XAUUSD" not in payload["targets"]
+    assert "GCF" not in payload["targets"]
 
 
 def test_build_payload_includes_divergence():
@@ -405,7 +405,7 @@ def test_build_payload_uses_realtime_quote_for_intl_gold():
         datetime(2026, 8, 20, tzinfo=UTC),
         intl_gold_realtime=intl_realtime,
     )
-    latest = payload["targets"]["XAUUSD"]["latest"]
+    latest = payload["targets"]["GCF"]["latest"]
     assert latest["close"] == 2077.7
     assert latest["is_realtime"] is True
 
