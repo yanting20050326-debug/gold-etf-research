@@ -25,7 +25,7 @@ from loguru import logger
 
 GEMINI_API_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-2.0-flash:generateContent"
+    "gemini-3.6-flash:generateContent"
 )
 
 AI_SUMMARY_DISCLAIMER = "AI 根據價格與總體數字推測，非真實新聞報導，僅供研究參考。"

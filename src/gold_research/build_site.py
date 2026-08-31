@@ -164,6 +164,7 @@ def _build_twse_target(
     intl_gold_change_pct: float | None,
     usdtwd_change_pct: float | None,
     today: date,
+    cache_dir: Path,
 ) -> dict:
     meta = TARGET_META[code]
     closes = [bar.close for bar in bars]
@@ -183,7 +184,7 @@ def _build_twse_target(
         intl_gold_change_pct,
         usdtwd_change_pct,
         technical_label,
-        DATA_CACHE_DIR / f"ai_summary_{code}.json",
+        cache_dir / f"ai_summary_{code}.json",
         today,
     )
     return {
@@ -210,6 +211,7 @@ def _build_intl_gold_target(
     realtime: LatestQuote | None,
     usdtwd_change_pct: float | None,
     today: date,
+    cache_dir: Path,
 ) -> dict:
     closes = [p.close for p in points]
     latest_point = points[-1]
@@ -228,7 +230,7 @@ def _build_intl_gold_target(
         own_change_pct,  # 國際盤黃金自己就是「國際金價」，兩者相同
         usdtwd_change_pct,
         technical_label,
-        DATA_CACHE_DIR / f"ai_summary_{INTL_GOLD_CODE}.json",
+        cache_dir / f"ai_summary_{INTL_GOLD_CODE}.json",
         today,
     )
     return {
@@ -253,6 +255,7 @@ def build_payload(
     generated_at: datetime,
     twse_realtime: dict[str, RealtimeQuote | None] | None = None,
     intl_gold_realtime: LatestQuote | None = None,
+    cache_dir: Path = DATA_CACHE_DIR,
 ) -> dict:
     twse_realtime = twse_realtime or {}
     today = generated_at.date()
@@ -272,6 +275,7 @@ def build_payload(
             intl_gold_change_pct,
             usdtwd_change_pct,
             today,
+            cache_dir,
         )
         for code, bars in twse_bars.items()
     }
@@ -282,6 +286,7 @@ def build_payload(
             intl_gold_realtime,
             usdtwd_change_pct,
             today,
+            cache_dir,
         )
 
     gold_by_date = {p.date: p.close for p in macro_gold.points}
