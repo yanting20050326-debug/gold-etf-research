@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 from gold_research.fetch_macro import (
     LatestQuote,
@@ -31,6 +33,9 @@ from gold_research.indicators import (
     technical_score,
     volatility_squeeze,
 )
+from gold_research.llm_summary import AI_SUMMARY_DISCLAIMER, generate_daily_summary
+
+load_dotenv()
 
 DISCLAIMER = "商品／避險資產研究參考，不構成投資建議，不自動下單，不保證收益。"
 
@@ -140,12 +145,47 @@ def _build_latest(
     raise TypeError(f"unsupported realtime quote type: {type(realtime)!r}")
 
 
+def _pct_change(prev: float | None, curr: float | None) -> float | None:
+    if prev is None or curr is None or prev == 0:
+        return None
+    return (curr - prev) / prev * 100
+
+
+def _ai_summary_field(ai_summary) -> dict | None:
+    if ai_summary is None:
+        return None
+    return {"text": ai_summary.text, "disclaimer": AI_SUMMARY_DISCLAIMER}
+
+
 def _build_twse_target(
-    code: str, bars: list[DailyBar], realtime: RealtimeQuote | None = None
+    code: str,
+    bars: list[DailyBar],
+    realtime: RealtimeQuote | None,
+    intl_gold_change_pct: float | None,
+    usdtwd_change_pct: float | None,
+    today: date,
 ) -> dict:
     meta = TARGET_META[code]
     closes = [bar.close for bar in bars]
     latest_bar = bars[-1]
+    indicators = _compute_indicators(closes)
+    own_change_pct = _pct_change(
+        bars[-2].close if len(bars) >= 2 else None, latest_bar.close
+    )
+    technical_label = (
+        indicators["technical_score"]["label"]
+        if indicators["technical_score"]
+        else None
+    )
+    ai_summary = generate_daily_summary(
+        meta["display_name"],
+        own_change_pct,
+        intl_gold_change_pct,
+        usdtwd_change_pct,
+        technical_label,
+        DATA_CACHE_DIR / f"ai_summary_{code}.json",
+        today,
+    )
     return {
         "code": code,
         "display_name": meta["display_name"],
@@ -156,18 +196,41 @@ def _build_twse_target(
         "latest": _build_latest(
             latest_bar.trading_date, latest_bar.close, latest_bar.volume, realtime
         ),
-        "indicators": _compute_indicators(closes),
+        "indicators": indicators,
         "chart": [
             {"trading_date": bar.trading_date, "close": bar.close} for bar in bars
         ],
+        "ai_summary": _ai_summary_field(ai_summary),
     }
 
 
 def _build_intl_gold_target(
-    points: list[PricePoint], as_of: str, realtime: LatestQuote | None = None
+    points: list[PricePoint],
+    as_of: str,
+    realtime: LatestQuote | None,
+    usdtwd_change_pct: float | None,
+    today: date,
 ) -> dict:
     closes = [p.close for p in points]
     latest_point = points[-1]
+    indicators = _compute_indicators(closes)
+    own_change_pct = _pct_change(
+        points[-2].close if len(points) >= 2 else None, latest_point.close
+    )
+    technical_label = (
+        indicators["technical_score"]["label"]
+        if indicators["technical_score"]
+        else None
+    )
+    ai_summary = generate_daily_summary(
+        INTL_GOLD_META["display_name"],
+        own_change_pct,
+        own_change_pct,  # 國際盤黃金自己就是「國際金價」，兩者相同
+        usdtwd_change_pct,
+        technical_label,
+        DATA_CACHE_DIR / f"ai_summary_{INTL_GOLD_CODE}.json",
+        today,
+    )
     return {
         "code": INTL_GOLD_CODE,
         "display_name": INTL_GOLD_META["display_name"],
@@ -176,9 +239,10 @@ def _build_intl_gold_target(
         "badge": INTL_GOLD_META["badge"],
         "data_source": {"name": "Yahoo Finance (GC=F)", "as_of": as_of},
         "latest": _build_latest(latest_point.date, latest_point.close, None, realtime),
-        "indicators": _compute_indicators(closes),
+        "indicators": indicators,
         "chart": [{"trading_date": p.date, "close": p.close} for p in points],
         "passbook_note": GOLD_PASSBOOK_NOTE,
+        "ai_summary": _ai_summary_field(ai_summary),
     }
 
 
@@ -191,13 +255,33 @@ def build_payload(
     intl_gold_realtime: LatestQuote | None = None,
 ) -> dict:
     twse_realtime = twse_realtime or {}
+    today = generated_at.date()
+    intl_gold_change_pct = _pct_change(
+        macro_gold.points[-2].close if len(macro_gold.points) >= 2 else None,
+        macro_gold.points[-1].close if macro_gold.points else None,
+    )
+    usdtwd_change_pct = _pct_change(
+        macro_fx.points[-2].close if len(macro_fx.points) >= 2 else None,
+        macro_fx.points[-1].close if macro_fx.points else None,
+    )
     targets = {
-        code: _build_twse_target(code, bars, twse_realtime.get(code))
+        code: _build_twse_target(
+            code,
+            bars,
+            twse_realtime.get(code),
+            intl_gold_change_pct,
+            usdtwd_change_pct,
+            today,
+        )
         for code, bars in twse_bars.items()
     }
     if macro_gold.points:
         targets[INTL_GOLD_CODE] = _build_intl_gold_target(
-            macro_gold.points, macro_gold.as_of, intl_gold_realtime
+            macro_gold.points,
+            macro_gold.as_of,
+            intl_gold_realtime,
+            usdtwd_change_pct,
+            today,
         )
 
     gold_by_date = {p.date: p.close for p in macro_gold.points}
@@ -279,6 +363,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .score-item-label { display: block; font-size: 11px; color: var(--text-muted); }
   .score-item-value { display: block; font-weight: 700; font-size: 18px; margin-top: 2px; }
   .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 999px; background: #22c55e; margin-right: 6px; vertical-align: middle; }
+  .ai-summary-card { background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 8px; padding: 14px 16px; margin: 12px 0; }
   .discipline-card { background: var(--gold-bg); border: 1px solid var(--gold-border); border-radius: 8px; padding: 14px 16px; margin: 12px 0; }
   .discipline-list { margin: 8px 0 0; padding-left: 20px; font-size: 13px; line-height: 1.6; color: var(--text-secondary); }
   .buy-hint { background: #eff6ff; border: 1px solid #93c5fd; border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; }
@@ -431,6 +516,16 @@ function renderTechnicalScore(target) {
   return wrap;
 }
 
+function renderAiSummary(target) {
+  const summary = target.ai_summary;
+  if (!summary) return null;
+  const wrap = el("div", { className: "ai-summary-card" });
+  wrap.appendChild(el("h3", { textContent: "AI 推測：今天可能的漲跌原因" }));
+  wrap.appendChild(el("p", { textContent: summary.text }));
+  wrap.appendChild(el("p", { className: "source-note", textContent: summary.disclaimer }));
+  return wrap;
+}
+
 function indicatorCard(key, label, valueText, extraNode) {
   const card = el("div", { className: "indicator", tabIndex: 0 });
   const summary = el("div", { className: "indicator-summary", textContent: label + "：" + valueText });
@@ -518,6 +613,8 @@ function renderTarget(code) {
   }
   const scoreNode = renderTechnicalScore(target);
   if (scoreNode) card.appendChild(scoreNode);
+  const aiSummaryNode = renderAiSummary(target);
+  if (aiSummaryNode) card.appendChild(aiSummaryNode);
   renderHorizonTabs(card);
   card.appendChild(el("p", { className: "source-note", textContent: currentHorizon === "short" ? "短線：技術面擇時指標（RSI／布林通道／波動壓縮／區間位置）" : "長線：趨勢與總體面（MA／MACD，下方另有匯率、背離旗標）" }));
   card.appendChild(renderDisciplineCard(target));

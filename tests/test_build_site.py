@@ -361,3 +361,29 @@ def test_render_html_includes_score_panel_and_realtime_price():
     assert "score-composite" in html
     assert "target.latest.is_realtime" in html
     assert "live-dot" in html
+
+
+def test_build_payload_omits_ai_summary_without_api_key(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    macro_gold, macro_fx = _sample_macro()
+    payload = build_payload(
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
+    )
+    assert payload["targets"]["00635U"]["ai_summary"] is None
+
+
+def test_render_html_includes_ai_summary_render_hook():
+    macro_gold, macro_fx = _sample_macro()
+    payload = build_payload(
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
+    )
+    html = render_html(payload)
+
+    assert "renderAiSummary(target)" in html
+    assert "ai-summary-card" in html
