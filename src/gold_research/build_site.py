@@ -286,6 +286,10 @@ def _build_intl_gold_target(
         "asset_class_note": INTL_GOLD_META["asset_class_note"],
         "badge": INTL_GOLD_META["badge"],
         "pullback_scale": 1.0,
+        "quote_delay_note": (
+            "Yahoo Finance 免費期貨資料通常延遲約 10 分鐘，"
+            "此標的的即時價格不會比這個延遲更即時，跟 TWSE 標的的近乎即時報價不同。"
+        ),
         "data_source": {"name": "Yahoo Finance (GC=F)", "as_of": as_of},
         "latest": _build_latest(latest_point.date, latest_point.close, None, realtime),
         "indicators": indicators,
@@ -710,6 +714,9 @@ function renderTarget(code) {
     priceLine.appendChild(document.createTextNode("最新收盤：" + fmt(target.latest.close, 2) + "（" + target.latest.trading_date + "，非即時）"));
   }
   card.appendChild(priceLine);
+  if (target.quote_delay_note) {
+    card.appendChild(el("p", { className: "source-note", textContent: target.quote_delay_note }));
+  }
   const passbookNode = renderPassbookEstimate(target);
   if (passbookNode) card.appendChild(passbookNode);
   const scoreNode = renderTechnicalScore(target);

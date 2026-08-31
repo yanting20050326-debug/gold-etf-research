@@ -121,6 +121,7 @@ def test_build_payload_includes_multiple_twse_targets_and_intl_gold():
     intl_gold = payload["targets"]["GCF"]
     assert intl_gold["asset_class"] == "commodity_futures"
     assert intl_gold["pullback_scale"] == 1.0
+    assert intl_gold["quote_delay_note"]
     # 6 macro fixture points isn't enough for the 30-day relative_position
     # window; it's expected to be None, not the schema key being missing.
     assert "relative_position" in intl_gold["indicators"]
