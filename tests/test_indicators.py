@@ -5,6 +5,7 @@ from gold_research.indicators import (
     divergence_flag,
     exponential_moving_average,
     macd,
+    prior_swing_low,
     pullback_stage,
     relative_position,
     relative_strength_index,
@@ -189,6 +190,27 @@ def test_pullback_stage_all_zone_boundaries():
 
 def test_pullback_stage_insufficient_data():
     assert pullback_stage([100.0] * 10, window=30) is None
+
+
+def test_prior_swing_low_detects_trough_before_recent_high():
+    # Descend to a clear trough at index 9 (111.0), then rally to a new
+    # 30-day high at the last index — the trough is where the rally started.
+    closes = [120.0 - i for i in range(10)]
+    closes += [111.0 + i for i in range(1, 21)]
+    result = prior_swing_low(closes, window=30, swing_span=3)
+    assert result["price"] == pytest.approx(111.0)
+    assert result["days_before_high"] == 20
+
+
+def test_prior_swing_low_returns_none_without_a_local_minimum():
+    # Strictly rising the whole window — no point has lower valleys on both
+    # sides, so there is no well-defined swing low to report.
+    closes = [100.0 + i for i in range(30)]
+    assert prior_swing_low(closes, window=30, swing_span=3) is None
+
+
+def test_prior_swing_low_insufficient_data():
+    assert prior_swing_low([100.0] * 10, window=30) is None
 
 
 def test_technical_score_computes_composite_and_label():

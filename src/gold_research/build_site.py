@@ -19,6 +19,7 @@ from gold_research.fetch_macro import (
 from gold_research.fetch_twse import (
     DailyBar,
     RealtimeQuote,
+    TwseFetchError,
     fetch_month,
     fetch_realtime_quote,
 )
@@ -26,6 +27,7 @@ from gold_research.indicators import (
     bollinger_bands,
     divergence_flag,
     macd,
+    prior_swing_low,
     pullback_stage,
     relative_position,
     relative_strength_index,
@@ -106,6 +108,7 @@ def _compute_indicators(closes: list[float]) -> dict:
         "volatility_squeeze": volatility_squeeze(closes, 5, 20),
         "relative_position": relative_position(closes, 30),
         "pullback_stage": pullback_stage(closes, 30),
+        "prior_low": prior_swing_low(closes, 30),
         "technical_score": technical_score(
             close=closes[-1],
             ma20=sma20[-1],
@@ -500,6 +503,14 @@ function renderDisciplineCard(target) {
   } else {
     wrap.appendChild(el("p", { className: "source-note", textContent: "資料不足，無法計算目前回檔幅度。" }));
   }
+  const pl = target.indicators.prior_low;
+  if (pl) {
+    wrap.appendChild(el("p", {
+      textContent: "起漲前低（" + pl.days_before_high + " 天前）：" + fmt(pl.price, 2) + "，跌破這裡代表這波漲勢可能已經轉弱。",
+    }));
+  } else {
+    wrap.appendChild(el("p", { className: "source-note", textContent: "資料不足，暫時抓不到明確的起漲前低。" }));
+  }
   const list = el("ul", { className: "discipline-list" });
   DISCIPLINE_RULES.forEach((rule) => {
     list.appendChild(el("li", { textContent: rule }));
@@ -756,17 +767,43 @@ def render_html(payload: dict) -> str:
     return HTML_TEMPLATE.replace("__DATA__", data_json)
 
 
+def _fetch_bars_with_fallback(
+    code: str, year: int, month: int, min_bars: int = 30
+) -> list[DailyBar]:
+    """抓當月資料，不足 min_bars 筆時往前逐月追加，最多再往回抓 3 個月。
+
+    TWSE STOCK_DAY 對「這個月還沒有資料」不是回傳空陣列，而是丟
+    TwseFetchError，要接住才能正常 fallback。剛跨月的第一天更是連上個月
+    單獨算都不夠 30 筆（一個月大約 20 出頭個交易日），所以要能連續往回
+    追加，而不是只 fallback 一次就停。
+    """
+    try:
+        bars = fetch_month(code, year, month)
+    except TwseFetchError:
+        bars = []
+    cursor_year, cursor_month = year, month
+    for _ in range(3):
+        if len(bars) >= min_bars:
+            break
+        cursor_month -= 1
+        if cursor_month < 1:
+            cursor_month = 12
+            cursor_year -= 1
+        try:
+            older_bars = fetch_month(code, cursor_year, cursor_month)
+        except TwseFetchError:
+            older_bars = []
+        bars = older_bars + bars
+    return bars
+
+
 def main() -> None:
     now = datetime.now(UTC).astimezone()
     year, month = now.year, now.month
 
     twse_bars: dict[str, list[DailyBar]] = {}
     for code in TARGET_META:
-        bars = fetch_month(code, year, month)
-        if len(bars) < 30:
-            prev_month = month - 1 or 12
-            prev_year = year if month > 1 else year - 1
-            bars = fetch_month(code, prev_year, prev_month) + bars
+        bars = _fetch_bars_with_fallback(code, year, month)
         if not bars:
             raise RuntimeError(f"{code}: no TWSE bars fetched for the requested months")
         twse_bars[code] = bars

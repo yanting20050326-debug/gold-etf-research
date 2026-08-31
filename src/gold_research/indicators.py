@@ -184,6 +184,30 @@ def pullback_stage(
     }
 
 
+def prior_swing_low(
+    closes: list[float], window: int = 30, swing_span: int = 3
+) -> dict[str, float | int] | None:
+    """找近 window 天高點之前，最近一次的起漲低點（前後 swing_span 天都不比它低）。
+
+    這是判斷「跌破重要前低」紀律用的參考點：先定位近 window 天高點，
+    再往回找高點之前最近一個局部低點，也就是這波上漲行情大概是從哪裡起漲的。
+    找不到符合條件的低點（例如整段區間一路上漲、沒有明顯回檔）時回傳 None。
+    """
+    if len(closes) < window:
+        return None
+    segment = closes[-window:]
+    high_offset = segment.index(max(segment))
+    high_idx = len(closes) - window + high_offset
+    for i in range(high_idx - 1, swing_span - 1, -1):
+        left = closes[i - swing_span : i]
+        right = closes[i + 1 : i + 1 + swing_span]
+        if len(left) < swing_span or len(right) < swing_span:
+            continue
+        if closes[i] <= min(left) and closes[i] <= min(right):
+            return {"price": closes[i], "days_before_high": high_idx - i}
+    return None
+
+
 def _clamp(value: float, lo: float = 0.0, hi: float = 100.0) -> float:
     return max(lo, min(hi, value))
 

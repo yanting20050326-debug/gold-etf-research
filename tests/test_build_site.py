@@ -3,9 +3,10 @@ from datetime import UTC, datetime
 
 import pytest
 
+from gold_research import build_site as build_site_module
 from gold_research.build_site import build_payload, render_html
 from gold_research.fetch_macro import LatestQuote, MacroSeries, PricePoint
-from gold_research.fetch_twse import DailyBar, RealtimeQuote
+from gold_research.fetch_twse import DailyBar, RealtimeQuote, TwseFetchError
 
 
 def _sample_bars(base: float = 46.0) -> list[DailyBar]:
@@ -435,3 +436,64 @@ def test_render_html_includes_ai_summary_render_hook():
 
     assert "renderAiSummary(target)" in html
     assert "ai-summary-card" in html
+
+
+def test_fetch_bars_with_fallback_uses_prior_month_when_current_month_has_no_data(
+    monkeypatch,
+):
+    # TWSE STOCK_DAY raises TwseFetchError (rather than returning an empty
+    # list) when a month has no published trading days yet — e.g. right at
+    # the start of a new month. The fallback must still kick in instead of
+    # letting that exception crash the whole build.
+    prev_bars = _sample_bars()
+
+    def fake_fetch_month(code, year, month):
+        if month == 9:
+            raise TwseFetchError("stat != OK")
+        return prev_bars
+
+    monkeypatch.setattr(build_site_module, "fetch_month", fake_fetch_month)
+    result = build_site_module._fetch_bars_with_fallback("00635U", 2026, 9)
+    assert result == prev_bars
+
+
+def test_fetch_bars_with_fallback_chains_back_multiple_months_when_needed():
+    # Right on the 1st of a new month, the current month has zero data and
+    # even the immediately prior month alone (~20 TWSE trading days) isn't
+    # enough for the 30-day indicator window, so it must keep walking back.
+    august_bars = _sample_bars()[:20]
+    july_bars = _sample_bars()[:15]
+
+    def fake_fetch_month(code, year, month):
+        if month == 9:
+            raise TwseFetchError("no data yet")
+        if month == 8:
+            return august_bars
+        if month == 7:
+            return july_bars
+        raise AssertionError(f"unexpected month {month}")
+
+    original = build_site_module.fetch_month
+    build_site_module.fetch_month = fake_fetch_month
+    try:
+        result = build_site_module._fetch_bars_with_fallback("00635U", 2026, 9)
+    finally:
+        build_site_module.fetch_month = original
+    assert result == july_bars + august_bars
+
+
+def test_fetch_bars_with_fallback_skips_prior_month_when_current_has_enough():
+    current_bars = _sample_bars()  # 30 bars, meets the >=30 threshold
+
+    def fake_fetch_month(code, year, month):
+        if month == 8:
+            raise AssertionError("should not fall back when current month suffices")
+        return current_bars
+
+    original = build_site_module.fetch_month
+    build_site_module.fetch_month = fake_fetch_month
+    try:
+        result = build_site_module._fetch_bars_with_fallback("00635U", 2026, 9)
+    finally:
+        build_site_module.fetch_month = original
+    assert result == current_bars
