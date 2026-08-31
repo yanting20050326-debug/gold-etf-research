@@ -51,11 +51,12 @@ TARGET_META = {
         "asset_class": "commodity_futures_etf",
         "asset_class_note": (
             "商品期貨型ETF，追蹤COMEX黃金期貨，受美元、實質利率、避險情緒、通膨預期影響，"
-            "不是公司基本面驅動；MA/RSI/布林/MACD 是通用技術工具，解讀方式跟股票型ETF不同。"
+            "不是公司基本面驅動；沒有槓桿，長期持有不會有槓桿耗損，但期貨轉倉遇到正價差時"
+            "會有小幅轉倉成本，長期報酬可能略遜於現貨金價；MA/RSI/布林/MACD 是通用技術工具，"
+            "解讀方式跟股票型ETF不同。"
         ),
         "badge": "商品／避險資產，非股票型ETF",
         "pullback_scale": 1.0,
-        "supports_long_horizon": True,
     },
     "00708L": {
         "display_name": "期元大S&P黃金正2",
@@ -66,7 +67,6 @@ TARGET_META = {
         ),
         "badge": "2倍槓桿，僅適合短線",
         "pullback_scale": 2.0,
-        "supports_long_horizon": False,
     },
 }
 
@@ -215,7 +215,6 @@ def _build_twse_target(
         "asset_class_note": meta["asset_class_note"],
         "badge": meta["badge"],
         "pullback_scale": pullback_scale,
-        "supports_long_horizon": meta.get("supports_long_horizon", True),
         "data_source": {"name": "TWSE STOCK_DAY", "as_of": latest_bar.trading_date},
         "latest": _build_latest(
             latest_bar.trading_date, latest_bar.close, latest_bar.volume, realtime
@@ -285,7 +284,6 @@ def _build_intl_gold_target(
         "asset_class_note": INTL_GOLD_META["asset_class_note"],
         "badge": INTL_GOLD_META["badge"],
         "pullback_scale": 1.0,
-        "supports_long_horizon": True,
         "data_source": {"name": "Yahoo Finance (GC=F)", "as_of": as_of},
         "latest": _build_latest(latest_point.date, latest_point.close, None, realtime),
         "indicators": indicators,
@@ -682,41 +680,9 @@ function updateTabActiveState() {
   });
 }
 
-let currentHorizon = "short";
-
-function renderHorizonTabs(card, target) {
-  if (!target.supports_long_horizon) {
-    card.appendChild(el("p", { className: "source-note", textContent: "此標的僅適合短線操作，固定顯示短線指標，不提供長線分頁。" }));
-    return;
-  }
-  const bar = el("div", { className: "tab-bar horizon-tab-bar" });
-  const options = [
-    { key: "short", label: "短線" },
-    { key: "long", label: "長線" },
-  ];
-  options.forEach((opt) => {
-    const btn = el("button", { className: "tab-button", textContent: opt.label });
-    btn.dataset.horizon = opt.key;
-    if (opt.key === currentHorizon) btn.classList.add("active");
-    btn.addEventListener("click", () => {
-      currentHorizon = opt.key;
-      renderTarget(currentTargetCode);
-      updateMacroVisibility();
-    });
-    bar.appendChild(btn);
-  });
-  card.appendChild(bar);
-}
-
-function updateMacroVisibility() {
-  const macroCard = document.getElementById("macro-card");
-  macroCard.style.display = currentHorizon === "long" ? "" : "none";
-}
-
 function renderTarget(code) {
   currentTargetCode = code;
   const target = SITE_DATA.targets[code];
-  if (!target.supports_long_horizon) currentHorizon = "short";
   const card = document.getElementById("target-card");
   card.innerHTML = "";
   const heading = el("h2", { textContent: target.display_name + " (" + target.code + ") " });
@@ -738,26 +704,19 @@ function renderTarget(code) {
   if (scoreNode) card.appendChild(scoreNode);
   const aiSummaryNode = renderAiSummary(target);
   if (aiSummaryNode) card.appendChild(aiSummaryNode);
-  renderHorizonTabs(card, target);
-  if (target.supports_long_horizon) {
-    card.appendChild(el("p", { className: "source-note", textContent: currentHorizon === "short" ? "短線：技術面擇時指標（RSI／布林通道／波動壓縮／區間位置）" : "長線：趨勢與總體面（MA／MACD，下方另有匯率、背離旗標）" }));
-  }
   card.appendChild(renderDisciplineCard(target));
   const grid = el("div", { className: "indicator-grid" });
   const signals = target.indicators.stage_signals;
-  if (currentHorizon === "short") {
-    grid.appendChild(indicatorCard("rsi14", "RSI14", fmt(target.indicators.rsi14, 2), signals ? signalBadgeParagraph("止跌判斷（RSI回升+近3天無新低）", signals.momentum_stabilizing) : null));
-    grid.appendChild(indicatorCard("bollinger", "布林通道", fmt(target.indicators.bollinger.lower, 2) + " ~ " + fmt(target.indicators.bollinger.upper, 2)));
-    const vs = target.indicators.volatility_squeeze;
-    const vsText = vs.ratio === null ? "資料不足" : fmt(vs.ratio, 2) + (vs.is_compressed ? "（壓縮中）" : "");
-    grid.appendChild(indicatorCard("volatility_squeeze", "波動壓縮比", vsText));
-    const rp = target.indicators.relative_position;
-    const rpText = rp === null ? "資料不足" : fmt(rp.position * 100, 0) + "%（" + rp.label + "）";
-    grid.appendChild(indicatorCard("relative_position", "區間位置", rpText, renderPositionGauge(rp)));
-  } else {
-    grid.appendChild(indicatorCard("ma20", "MA20", fmt(target.indicators.ma20, 2), signals ? signalBadgeParagraph("趨勢沒壞判斷（站上MA20+未破前低）", signals.trend_intact) : null));
-    grid.appendChild(indicatorCard("macd", "MACD", fmt(target.indicators.macd.macd, 4) + " / 訊號線 " + fmt(target.indicators.macd.signal, 4), signals ? signalBadgeParagraph("重新轉強判斷（MACD黃金交叉）", signals.macd_golden_cross) : null));
-  }
+  grid.appendChild(indicatorCard("rsi14", "RSI14", fmt(target.indicators.rsi14, 2), signals ? signalBadgeParagraph("止跌判斷（RSI回升+近3天無新低）", signals.momentum_stabilizing) : null));
+  grid.appendChild(indicatorCard("bollinger", "布林通道", fmt(target.indicators.bollinger.lower, 2) + " ~ " + fmt(target.indicators.bollinger.upper, 2)));
+  const vs = target.indicators.volatility_squeeze;
+  const vsText = vs.ratio === null ? "資料不足" : fmt(vs.ratio, 2) + (vs.is_compressed ? "（壓縮中）" : "");
+  grid.appendChild(indicatorCard("volatility_squeeze", "波動壓縮比", vsText));
+  const rp = target.indicators.relative_position;
+  const rpText = rp === null ? "資料不足" : fmt(rp.position * 100, 0) + "%（" + rp.label + "）";
+  grid.appendChild(indicatorCard("relative_position", "區間位置", rpText, renderPositionGauge(rp)));
+  grid.appendChild(indicatorCard("ma20", "MA20", fmt(target.indicators.ma20, 2), signals ? signalBadgeParagraph("趨勢沒壞判斷（站上MA20+未破前低）", signals.trend_intact) : null));
+  grid.appendChild(indicatorCard("macd", "MACD", fmt(target.indicators.macd.macd, 4) + " / 訊號線 " + fmt(target.indicators.macd.signal, 4), signals ? signalBadgeParagraph("重新轉強判斷（MACD黃金交叉）", signals.macd_golden_cross) : null));
   card.appendChild(grid);
   if (target.chart && target.chart.length > 1) {
     card.appendChild(el("p", { textContent: "近 " + target.chart.length + " 個交易日走勢：" }));
@@ -806,7 +765,6 @@ function refreshSiteData() {
       renderTargetTabs();
       renderTarget(currentTargetCode || Object.keys(SITE_DATA.targets)[0]);
       renderMacro();
-      updateMacroVisibility();
     })
     .catch(() => {});
 }
@@ -815,7 +773,6 @@ renderDisclaimer();
 renderTargetTabs();
 renderTarget(Object.keys(SITE_DATA.targets)[0]);
 renderMacro();
-updateMacroVisibility();
 if (SITE_DATA.auto_refresh_seconds) {
   setInterval(refreshSiteData, SITE_DATA.auto_refresh_seconds * 1000);
 }

@@ -117,14 +117,9 @@ def test_build_payload_includes_multiple_twse_targets_and_intl_gold():
     # should be doubled relative to the unleveraged 00635U and XAUUSD.
     assert payload["targets"]["00635U"]["pullback_scale"] == 1.0
     assert payload["targets"]["00708L"]["pullback_scale"] == 2.0
-    # 00708L is explicitly "僅適合短線操作" (short-term only), so it
-    # shouldn't offer a long-horizon view at all.
-    assert payload["targets"]["00635U"]["supports_long_horizon"] is True
-    assert payload["targets"]["00708L"]["supports_long_horizon"] is False
     intl_gold = payload["targets"]["XAUUSD"]
     assert intl_gold["asset_class"] == "commodity_spot"
     assert intl_gold["pullback_scale"] == 1.0
-    assert intl_gold["supports_long_horizon"] is True
     # 6 macro fixture points isn't enough for the 30-day relative_position
     # window; it's expected to be None, not the schema key being missing.
     assert "relative_position" in intl_gold["indicators"]
@@ -258,7 +253,12 @@ def test_render_html_includes_new_indicator_cards_and_divergence():
     assert "macro.divergence" in html
 
 
-def test_render_html_splits_indicators_by_horizon_tab():
+def test_render_html_shows_all_six_indicators_together():
+    # Horizon tabs were removed: the discipline card's own signal checks
+    # (trend_intact needs MA20, macd_golden_cross needs MACD) reference
+    # indicators regardless of which "horizon" a user might have been on,
+    # so splitting the indicator grid by tab just hid the numbers behind
+    # those checks. All six cards now render unconditionally together.
     macro_gold, macro_fx = _sample_macro()
     payload = build_payload(
         {"00635U": _sample_bars()},
@@ -268,18 +268,16 @@ def test_render_html_splits_indicators_by_horizon_tab():
     )
     html = render_html(payload)
 
-    # Short-horizon cards.
     assert 'indicatorCard("rsi14"' in html
     assert 'indicatorCard("bollinger"' in html
     assert 'indicatorCard("volatility_squeeze"' in html
     assert 'indicatorCard("relative_position"' in html
-    # Long-horizon cards.
     assert 'indicatorCard("ma20"' in html
     assert 'indicatorCard("macd"' in html
-    # The horizon-tab mechanism and macro-card visibility toggle itself.
-    assert "renderHorizonTabs" in html
-    assert 'currentHorizon === "short"' in html
-    assert "updateMacroVisibility" in html
+    # The old horizon-tab mechanism should be gone entirely, not just unused.
+    assert "renderHorizonTabs" not in html
+    assert "currentHorizon" not in html
+    assert "updateMacroVisibility" not in html
 
 
 def test_render_html_has_no_candidates_section():
