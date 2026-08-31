@@ -27,6 +27,8 @@ from gold_research.indicators import (
     bollinger_bands,
     divergence_flag,
     macd,
+    macd_golden_cross,
+    momentum_stabilizing,
     prior_swing_low,
     pullback_stage,
     relative_position,
@@ -34,6 +36,7 @@ from gold_research.indicators import (
     simple_moving_average,
     synthetic_price_series,
     technical_score,
+    trend_still_intact,
     volatility_squeeze,
 )
 from gold_research.llm_summary import AI_SUMMARY_DISCLAIMER, generate_daily_summary
@@ -92,6 +95,7 @@ def _compute_indicators(closes: list[float]) -> dict:
     rsi14 = relative_strength_index(closes, 14)
     bands = bollinger_bands(closes, 20, 2.0)
     macd_result = macd(closes, 12, 26, 9)
+    prior_low = prior_swing_low(closes, 30)
     return {
         "ma20": sma20[-1],
         "rsi14": rsi14[-1],
@@ -108,7 +112,7 @@ def _compute_indicators(closes: list[float]) -> dict:
         "volatility_squeeze": volatility_squeeze(closes, 5, 20),
         "relative_position": relative_position(closes, 30),
         "pullback_stage": pullback_stage(closes, 30),
-        "prior_low": prior_swing_low(closes, 30),
+        "prior_low": prior_low,
         "technical_score": technical_score(
             close=closes[-1],
             ma20=sma20[-1],
@@ -116,6 +120,13 @@ def _compute_indicators(closes: list[float]) -> dict:
             bollinger={"upper": bands["upper"][-1], "lower": bands["lower"][-1]},
             macd_value=macd_result["macd"][-1],
         ),
+        "stage_signals": {
+            "trend_intact": trend_still_intact(
+                closes[-1], sma20[-1], prior_low["price"] if prior_low else None
+            ),
+            "momentum_stabilizing": momentum_stabilizing(closes),
+            "macd_golden_cross": macd_golden_cross(closes),
+        },
     }
 
 
@@ -479,15 +490,29 @@ function renderSparkline(points, color) {
 const DISCIPLINE_RULES = [
   "只做中期多頭的黃金。",
   "不在暴漲創高時追價。",
-  "回檔 3～4% 開始第一筆 40%。",
-  "回檔 5～6%，趨勢沒壞再加 20%。",
+  "回檔 3～4% 開始第一筆 20%。",
+  "回檔 4～6%，趨勢沒壞再加 20%。",
   "6～9% 區間出現止跌，再加 20%。",
-  "最後 20% 一定等重新轉強。",
+  "最後 40% 一定等重新轉強。",
   "跌破重要前低，立即停止加碼。",
   "不要無限攤平。",
   "+5%、+8%、+10～12% 分批獲利。",
   "剩餘 40% 讓趨勢決定出場。",
 ];
+
+function stageSignalInfo(stage, signals) {
+  if (!signals) return null;
+  if (stage === "加碼 20%（前提：趨勢沒壞）") {
+    return { label: "趨勢是否還沒壞", value: signals.trend_intact };
+  }
+  if (stage === "加碼 20%（前提：出現止跌）") {
+    return { label: "是否已經止跌", value: signals.momentum_stabilizing };
+  }
+  if (stage === "最後 40%（等重新轉強）") {
+    return { label: "是否已經重新轉強（MACD 黃金交叉）", value: signals.macd_golden_cross };
+  }
+  return null;
+}
 
 function renderDisciplineCard(target) {
   const wrap = el("div", { className: "discipline-card" });
@@ -500,6 +525,15 @@ function renderDisciplineCard(target) {
     wrap.appendChild(el("p", {
       textContent: "近 30 天高點 " + fmt(ps.recent_high, 2) + "，目前回檔 " + fmt(ps.pullback_pct, 1) + "%，對照紀律大概落在：" + ps.stage,
     }));
+    const signalInfo = stageSignalInfo(ps.stage, target.indicators.stage_signals);
+    if (signalInfo) {
+      const badgeText = signalInfo.value === true ? "✓ 符合" : signalInfo.value === false ? "✗ 尚未符合" : "資料不足";
+      const badgeClass = signalInfo.value === true ? "badge badge-ok" : signalInfo.value === false ? "badge badge-warn" : "badge";
+      const condP = el("p", {});
+      condP.appendChild(document.createTextNode(signalInfo.label + "："));
+      condP.appendChild(el("span", { className: badgeClass, textContent: badgeText }));
+      wrap.appendChild(condP);
+    }
   } else {
     wrap.appendChild(el("p", { className: "source-note", textContent: "資料不足，無法計算目前回檔幅度。" }));
   }

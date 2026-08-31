@@ -93,6 +93,12 @@ def test_build_payload_has_expected_schema():
     assert target["indicators"]["ma20"] is not None
     assert target["indicators"]["rsi14"] is not None
     assert len(target["chart"]) == 30
+    signals = target["indicators"]["stage_signals"]
+    assert set(signals.keys()) == {
+        "trend_intact",
+        "momentum_stabilizing",
+        "macd_golden_cross",
+    }
     assert "candidates" not in payload
 
 
@@ -306,7 +312,7 @@ def test_render_html_includes_discipline_card():
     html = render_html(payload)
 
     assert "renderDisciplineCard(target)" in html
-    assert "回檔 3～4% 開始第一筆 40%" in html
+    assert "回檔 3～4% 開始第一筆 20%" in html
     assert "不要無限攤平" in html
     assert "buy-hint" in html
     assert '"提示：" + ps.hint' in html

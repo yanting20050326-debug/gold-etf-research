@@ -5,6 +5,8 @@ from gold_research.indicators import (
     divergence_flag,
     exponential_moving_average,
     macd,
+    macd_golden_cross,
+    momentum_stabilizing,
     prior_swing_low,
     pullback_stage,
     relative_position,
@@ -12,6 +14,7 @@ from gold_research.indicators import (
     simple_moving_average,
     synthetic_price_series,
     technical_score,
+    trend_still_intact,
     volatility_squeeze,
 )
 
@@ -171,8 +174,8 @@ def test_pullback_stage_first_tranche_zone():
     result = pullback_stage(closes, window=30)
     assert result["recent_high"] == 100.0
     assert result["pullback_pct"] == pytest.approx(3.0)
-    assert result["stage"] == "第一筆 40%"
-    assert result["hint"] == "符合第一筆進場條件，可考慮分批的第一筆 40%"
+    assert result["stage"] == "第一筆 20%"
+    assert result["hint"] == "符合第一筆進場條件，可考慮分批的第一筆 20%"
 
 
 def test_pullback_stage_all_zone_boundaries():
@@ -182,10 +185,10 @@ def test_pullback_stage_all_zone_boundaries():
         return [high] * 29 + [current]
 
     assert pullback_stage(make(1))["stage"] == "觀察區（尚未回檔到位）"
-    assert pullback_stage(make(4))["stage"] == "第一筆 40%"
-    assert pullback_stage(make(5.5))["stage"] == "加碼 20%（前提：趨勢沒壞）"
+    assert pullback_stage(make(3.5))["stage"] == "第一筆 20%"
+    assert pullback_stage(make(5))["stage"] == "加碼 20%（前提：趨勢沒壞）"
     assert pullback_stage(make(7))["stage"] == "加碼 20%（前提：出現止跌）"
-    assert pullback_stage(make(12))["stage"] == "最後 20%（等重新轉強）"
+    assert pullback_stage(make(12))["stage"] == "最後 40%（等重新轉強）"
 
 
 def test_pullback_stage_insufficient_data():
@@ -211,6 +214,70 @@ def test_prior_swing_low_returns_none_without_a_local_minimum():
 
 def test_prior_swing_low_insufficient_data():
     assert prior_swing_low([100.0] * 10, window=30) is None
+
+
+def test_trend_still_intact_true_when_above_both_references():
+    assert trend_still_intact(close=105.0, ma20=100.0, prior_low_price=95.0) is True
+
+
+def test_trend_still_intact_false_when_below_ma20():
+    assert trend_still_intact(close=98.0, ma20=100.0, prior_low_price=95.0) is False
+
+
+def test_trend_still_intact_false_when_below_prior_low():
+    assert trend_still_intact(close=94.0, ma20=90.0, prior_low_price=95.0) is False
+
+
+def test_trend_still_intact_none_when_inputs_missing():
+    assert trend_still_intact(close=100.0, ma20=None, prior_low_price=95.0) is None
+    assert trend_still_intact(close=100.0, ma20=90.0, prior_low_price=None) is None
+
+
+def test_momentum_stabilizing_true_when_rsi_recovers_without_new_low():
+    closes = [100, 98, 96, 94, 92, 90, 89, 90, 91]
+    assert momentum_stabilizing(closes, rsi_window=5, lookback=3) is True
+
+
+def test_momentum_stabilizing_false_when_still_making_new_lows():
+    closes = [100, 98, 96, 94, 92, 90, 89, 87, 85]
+    assert momentum_stabilizing(closes, rsi_window=5, lookback=3) is False
+
+
+def test_momentum_stabilizing_none_with_insufficient_data():
+    assert momentum_stabilizing([100.0] * 5, rsi_window=14, lookback=3) is None
+
+
+def test_macd_golden_cross_true_on_fresh_flip_to_positive():
+    # Accelerating decline (keeps histogram clearly negative for a while),
+    # then a sharp V-reversal in the last few days flips it positive.
+    closes = [200.0]
+    for i in range(1, 45):
+        closes.append(closes[-1] - min(0.2 + i * 0.15, 6.0))
+    bottom = closes[-1]
+    closes += [bottom + 3, bottom + 8, bottom + 15]
+    assert macd_golden_cross(closes, lookback=3) is True
+
+
+def test_macd_golden_cross_false_when_already_established():
+    # Same setup, but the rally has run long enough that the cross happened
+    # well outside the lookback window — no longer a *fresh* signal.
+    closes = [200.0]
+    for i in range(1, 45):
+        closes.append(closes[-1] - min(0.2 + i * 0.15, 6.0))
+    bottom = closes[-1]
+    closes += [
+        bottom + 3,
+        bottom + 8,
+        bottom + 15,
+        bottom + 20,
+        bottom + 24,
+        bottom + 27,
+    ]
+    assert macd_golden_cross(closes, lookback=3) is False
+
+
+def test_macd_golden_cross_none_with_insufficient_data():
+    assert macd_golden_cross([100.0] * 10, lookback=3) is None
 
 
 def test_technical_score_computes_composite_and_label():

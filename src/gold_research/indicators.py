@@ -147,10 +147,10 @@ def relative_position(
 
 _STAGE_HINTS = {
     "觀察區（尚未回檔到位）": "尚未回檔到位，暫不建議進場",
-    "第一筆 40%": "符合第一筆進場條件，可考慮分批的第一筆 40%",
+    "第一筆 20%": "符合第一筆進場條件，可考慮分批的第一筆 20%",
     "加碼 20%（前提：趨勢沒壞）": "符合加碼條件，若趨勢未壞可加碼 20%",
     "加碼 20%（前提：出現止跌）": "符合加碼條件，若已出現止跌可再加碼 20%",
-    "最後 20%（等重新轉強）": "已達較大回檔，最後 20% 務必等重新轉強才進場，避免無限攤平",
+    "最後 40%（等重新轉強）": "已達較大回檔，最後 40% 務必等重新轉強才進場，避免無限攤平",
 }
 
 
@@ -168,14 +168,14 @@ def pullback_stage(
     )
     if pullback_pct < 3:
         stage = "觀察區（尚未回檔到位）"
-    elif pullback_pct < 5:
-        stage = "第一筆 40%"
+    elif pullback_pct < 4:
+        stage = "第一筆 20%"
     elif pullback_pct < 6:
         stage = "加碼 20%（前提：趨勢沒壞）"
     elif pullback_pct < 9:
         stage = "加碼 20%（前提：出現止跌）"
     else:
-        stage = "最後 20%（等重新轉強）"
+        stage = "最後 40%（等重新轉強）"
     return {
         "recent_high": recent_high,
         "pullback_pct": pullback_pct,
@@ -206,6 +206,49 @@ def prior_swing_low(
         if closes[i] <= min(left) and closes[i] <= min(right):
             return {"price": closes[i], "days_before_high": high_idx - i}
     return None
+
+
+def trend_still_intact(
+    close: float, ma20: float | None, prior_low_price: float | None
+) -> bool | None:
+    """4~6% 加碼區間用：收盤價是否還在 MA20 之上，且還沒跌破起漲前低。
+
+    兩個條件缺一都算「趨勢沒壞」不成立；任一個輸入資料不足（None）時，
+    代表無法判斷，回傳 None 而不是猜一個布林值。
+    """
+    if ma20 is None or prior_low_price is None:
+        return None
+    return close > ma20 and close > prior_low_price
+
+
+def momentum_stabilizing(
+    closes: list[float], rsi_window: int = 14, lookback: int = 3
+) -> bool | None:
+    """6~9% 加碼區間用：RSI 比 lookback 天前回升，且今天收盤沒創近 lookback 天新低。"""
+    if len(closes) <= lookback:
+        return None
+    rsi_series = relative_strength_index(closes, rsi_window)
+    if len(rsi_series) <= lookback:
+        return None
+    current_rsi, past_rsi = rsi_series[-1], rsi_series[-1 - lookback]
+    if current_rsi is None or past_rsi is None:
+        return None
+    rsi_recovering = current_rsi > past_rsi
+    no_new_low = closes[-1] >= min(closes[-1 - lookback : -1])
+    return rsi_recovering and no_new_low
+
+
+def macd_golden_cross(closes: list[float], lookback: int = 3) -> bool | None:
+    """>9% 最後一批用：近 lookback 天內 MACD histogram 是否由負轉正，且目前仍是正值。"""
+    result = macd(closes)
+    histogram = result["histogram"]
+    if len(histogram) <= lookback:
+        return None
+    current = histogram[-1]
+    recent = histogram[-1 - lookback : -1]
+    if current is None or any(h is None for h in recent):
+        return None
+    return current > 0 and any(h <= 0 for h in recent)
 
 
 def _clamp(value: float, lo: float = 0.0, hi: float = 100.0) -> float:
