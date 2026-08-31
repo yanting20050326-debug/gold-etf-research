@@ -345,6 +345,8 @@ def test_render_html_includes_position_gauge_and_auto_refresh():
     assert "refreshLiveQuotes" in html
     assert "SITE_DATA.live_refresh_seconds" in html
     assert "data/live_quotes.json" in html
+    assert 'id="page-updated-time"' in html
+    assert "markPageUpdatedNow()" in html
 
 
 def test_build_payload_includes_technical_score():

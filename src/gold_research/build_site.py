@@ -431,6 +431,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <div class="shell">
   <h1>黃金相關研究</h1>
   <div class="disclaimer" id="disclaimer"></div>
+  <p class="source-note" id="page-updated-line">頁面最後更新：<span id="page-updated-time">--:--:--</span></p>
   <div class="tab-bar" id="target-tabs"></div>
   <div class="card" id="target-card"></div>
   <div class="card" id="macro-card"></div>
@@ -461,6 +462,14 @@ function el(tag, props, children) {
 
 function renderDisclaimer() {
   document.getElementById("disclaimer").textContent = SITE_DATA.disclaimer;
+}
+
+function markPageUpdatedNow() {
+  const pad = (n) => String(n).padStart(2, "0");
+  const now = new Date();
+  const timeText = pad(now.getHours()) + ":" + pad(now.getMinutes()) + ":" + pad(now.getSeconds());
+  const el = document.getElementById("page-updated-time");
+  if (el) el.textContent = timeText;
 }
 
 function sparklinePath(points, width, height, padding) {
@@ -768,6 +777,7 @@ function refreshSiteData() {
       renderTargetTabs();
       renderTarget(currentTargetCode || Object.keys(SITE_DATA.targets)[0]);
       renderMacro();
+      markPageUpdatedNow();
     })
     .catch(() => {});
 }
@@ -786,6 +796,7 @@ function refreshLiveQuotes() {
         }
       });
       if (changed && currentTargetCode) renderTarget(currentTargetCode);
+      markPageUpdatedNow();
     })
     .catch(() => {});
 }
@@ -794,6 +805,7 @@ renderDisclaimer();
 renderTargetTabs();
 renderTarget(Object.keys(SITE_DATA.targets)[0]);
 renderMacro();
+markPageUpdatedNow();
 if (SITE_DATA.auto_refresh_seconds) {
   setInterval(refreshSiteData, SITE_DATA.auto_refresh_seconds * 1000);
 }
