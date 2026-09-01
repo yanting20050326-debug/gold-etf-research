@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>黃金相關研究</title>
+<style>
+  @keyframes cursorFade {
+    0% { opacity: 0; }
+    15% { opacity: var(--op, 1); }
+    50% { opacity: calc(var(--op, 1) * 0.7); }
+    100% { opacity: var(--op, 1); }
+  }
+  @keyframes ringSpin {
+    from { transform: translate(-50%, -50%) rotate(0deg); }
+    to { transform: translate(-50%, -50%) rotate(360deg); }
+  }
+  @keyframes glowPulse {
+    0%, 100% { opacity: 0; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(1.05); }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font-family: Helvetica, Arial, sans-serif; }
+  .cover {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    min-height: 640px;
+    overflow: hidden;
+    background: #000;
+  }
+  .cover-bg {
+    position: absolute;
+    inset: 0;
+    background-image: url("assets/cover-bg.jpg");
+    background-size: cover;
+    background-position: center;
+  }
+  .enter-button {
+    position: absolute;
+    left: 50%;
+    top: calc(50% - 0.5px);
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 22px;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 38px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+    cursor: pointer;
+    overflow: visible;
+    z-index: 20;
+    text-decoration: none;
+  }
+  .enter-button:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
+    transform: translate(-50%, -50%) scale(1.05);
+  }
+  .enter-button:active {
+    background: rgba(255, 255, 255, 0.4);
+    transform: translate(-50%, -50%) scale(0.95);
+  }
+  .enter-button::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 38px;
+    background: linear-gradient(to right, rgba(255,255,255,0.1), rgba(255,255,255,0.05), transparent);
+  }
+  .enter-button::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 38px;
+    box-shadow: inset 0 1px 8px rgba(255, 255, 255, 0.2);
+  }
+  .enter-button-glow {
+    position: absolute;
+    inset: 0;
+    border-radius: 38px;
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .enter-button.is-active .enter-button-glow {
+    animation: glowPulse 2s ease-in-out infinite;
+  }
+  .enter-button-text {
+    position: relative;
+    z-index: 10;
+    color: #fff;
+    font-size: 20px;
+    font-weight: 400;
+    letter-spacing: -0.7px;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+    white-space: nowrap;
+  }
+  .cursor-ring {
+    position: absolute;
+    left: 50%;
+    top: calc(50% - 0.5px);
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    z-index: 10;
+    display: none;
+  }
+  .enter-button.is-active .cursor-ring {
+    display: block;
+    animation: ringSpin 20s linear infinite;
+  }
+  .cursor-item {
+    position: absolute;
+    left: -10px;
+    top: -10px;
+    animation: cursorFade 2s ease-in-out infinite;
+    animation-delay: var(--delay, 0s);
+  }
+  .cursor-item svg {
+    filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.6));
+  }
+</style>
+</head>
+<body>
+<div class="cover">
+  <div class="cover-bg"></div>
+  <a class="enter-button" id="enterButton" href="dashboard.html">
+    <div class="enter-button-glow"></div>
+    <span class="cursor-ring" id="cursorRing"></span>
+    <span class="enter-button-text">開始分析</span>
+  </a>
+</div>
+<script>
+  (function () {
+    var button = document.getElementById("enterButton");
+    var ring = document.getElementById("cursorRing");
+
+    function buildCursors() {
+      var circles = [140, 180, 220, 260];
+      var counts = [8, 12, 16, 20];
+      var frag = document.createDocumentFragment();
+      circles.forEach(function (radius, ci) {
+        var count = counts[ci];
+        for (var i = 0; i < count; i++) {
+          var angle = (i / count) * 2 * Math.PI;
+          var x = Math.cos(angle) * radius;
+          var y = Math.sin(angle) * radius;
+          var rotation = Math.atan2(y, x) * (180 / Math.PI);
+          var baseDelay = ci * 0.01 + i * 0.002;
+          frag.appendChild(makeCursor(x, y, rotation, baseDelay, 1, 1));
+          for (var t = 1; t <= 2; t++) {
+            frag.appendChild(
+              makeCursor(x, y, rotation, baseDelay + t * 0.008, 1 - t * 0.2, 1 - t * 0.3)
+            );
+          }
+        }
+      });
+      ring.appendChild(frag);
+    }
+
+    function makeCursor(x, y, rotation, delay, scale, opacity) {
+      var el = document.createElement("span");
+      el.className = "cursor-item";
+      el.style.setProperty("--op", opacity);
+      el.style.setProperty("--delay", delay + "s");
+      el.style.transform =
+        "translate(" + x + "px, " + y + "px) rotate(" + rotation + "deg) scale(" + scale + ")";
+      el.innerHTML =
+        '<svg width="20" height="20" viewBox="0 0 20 20">' +
+        '<polygon points="2,1 18,10 11,12 8,18 6,11" fill="white"></polygon>' +
+        "</svg>";
+      return el;
+    }
+
+    buildCursors();
+
+    button.addEventListener("mouseenter", function () {
+      button.classList.add("is-active");
+    });
+    button.addEventListener("mouseleave", function () {
+      button.classList.remove("is-active");
+    });
+  })();
+</script>
+</body>
+</html>

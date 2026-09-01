@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from dataclasses import asdict
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -96,6 +97,7 @@ TROY_OUNCE_GRAMS = 31.1034768
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 SITE_DIR = PROJECT_ROOT / "site"
 DATA_CACHE_DIR = PROJECT_ROOT / "data_cache"
+STATIC_DIR = PROJECT_ROOT / "static"
 
 # GitHub Actions 排程每次都在全新、跑完就丟棄的機器上執行，本機檔案不會保留到
 # 下一次執行；LINE 通知需要記得「上次通知過的階段」才能只在真的變化時發送，
@@ -443,6 +445,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </head>
 <body>
   <div class="shell">
+  <p class="source-note"><a href="index.html">← 封面</a></p>
   <h1>黃金相關研究</h1>
   <div class="disclaimer" id="disclaimer"></div>
   <p class="source-note" id="page-updated-line">頁面最後更新：<span id="page-updated-time">--:--:--</span></p>
@@ -870,6 +873,21 @@ def _fetch_bars_with_fallback(
     return bars
 
 
+def _publish_static_cover() -> None:
+    """把手刻的封面頁（static/cover.html + assets）複製成 site/index.html。
+
+    封面頁是手刻的靜態內容，不是每次建置動態產生的，所以直接複製檔案，
+    讓它在每次排程重建後都還在；實際的儀表板改放在 dashboard.html，
+    封面頁的按鈕點下去會連過去。
+    """
+    if not (STATIC_DIR / "cover.html").exists():
+        return
+    shutil.copyfile(STATIC_DIR / "cover.html", SITE_DIR / "index.html")
+    static_assets = STATIC_DIR / "assets"
+    if static_assets.exists():
+        shutil.copytree(static_assets, SITE_DIR / "assets", dirs_exist_ok=True)
+
+
 def _fetch_published_notify_state() -> dict[str, dict]:
     """讀回已公開的 notify_state.json；抓不到（第一次執行、暫時性錯誤）就當空白重來。"""
     try:
@@ -906,7 +924,8 @@ def main() -> None:
     (SITE_DIR / "data" / "gold_site.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
     )
-    (SITE_DIR / "index.html").write_text(render_html(payload), encoding="utf-8")
+    (SITE_DIR / "dashboard.html").write_text(render_html(payload), encoding="utf-8")
+    _publish_static_cover()
 
     previous_notify_state = _fetch_published_notify_state()
     new_notify_state = check_and_notify(payload["targets"], previous_notify_state)
