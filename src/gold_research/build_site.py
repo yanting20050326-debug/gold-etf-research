@@ -7,6 +7,7 @@ from dataclasses import asdict
 from datetime import UTC, date, datetime
 from pathlib import Path
 
+import requests
 from dotenv import load_dotenv
 
 from gold_research.fetch_macro import (
@@ -40,6 +41,7 @@ from gold_research.indicators import (
     volatility_squeeze,
 )
 from gold_research.llm_summary import AI_SUMMARY_DISCLAIMER, generate_daily_summary
+from gold_research.notify_line import check_and_notify, write_notify_state
 
 load_dotenv()
 
@@ -94,6 +96,14 @@ TROY_OUNCE_GRAMS = 31.1034768
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 SITE_DIR = PROJECT_ROOT / "site"
 DATA_CACHE_DIR = PROJECT_ROOT / "data_cache"
+
+# GitHub Actions 排程每次都在全新、跑完就丟棄的機器上執行，本機檔案不會保留到
+# 下一次執行；LINE 通知需要記得「上次通知過的階段」才能只在真的變化時發送，
+# 所以直接讀回已公開的 notify_state.json 當作狀態來源，寫入時一併放進
+# site/ 目錄，讓它跟著這次建置結果一起發布到公開 repo，下次執行再讀回來。
+PUBLISHED_NOTIFY_STATE_URL = (
+    "https://yanting20050326-debug.github.io/gold-research-site/notify_state.json"
+)
 
 
 def _compute_indicators(closes: list[float], pullback_scale: float = 1.0) -> dict:
@@ -860,6 +870,17 @@ def _fetch_bars_with_fallback(
     return bars
 
 
+def _fetch_published_notify_state() -> dict[str, dict]:
+    """讀回已公開的 notify_state.json；抓不到（第一次執行、暫時性錯誤）就當空白重來。"""
+    try:
+        response = requests.get(PUBLISHED_NOTIFY_STATE_URL, timeout=10)
+        if response.status_code != 200:
+            return {}
+        return response.json()
+    except (requests.RequestException, ValueError):
+        return {}
+
+
 def main() -> None:
     now = datetime.now(UTC).astimezone()
     year, month = now.year, now.month
@@ -886,6 +907,10 @@ def main() -> None:
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     (SITE_DIR / "index.html").write_text(render_html(payload), encoding="utf-8")
+
+    previous_notify_state = _fetch_published_notify_state()
+    new_notify_state = check_and_notify(payload["targets"], previous_notify_state)
+    write_notify_state(SITE_DIR / "notify_state.json", new_notify_state)
 
 
 if __name__ == "__main__":
