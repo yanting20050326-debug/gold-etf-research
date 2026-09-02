@@ -1,0 +1,8 @@
+{
+  "name": "gold-research-trigger",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-02",
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  }
+}
