@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 import shutil
 from dataclasses import asdict
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import requests
 from dotenv import load_dotenv
@@ -106,6 +107,18 @@ STATIC_DIR = PROJECT_ROOT / "static"
 PUBLISHED_NOTIFY_STATE_URL = (
     "https://yanting20050326-debug.github.io/gold-research-site/notify_state.json"
 )
+PUBLISHED_SITE_DATA_URL = (
+    "https://yanting20050326-debug.github.io/gold-research-site/data/gold_site.json"
+)
+
+# TWSE 只有交易日盤中才有新資料——STOCK_DAY 日線一天只變一次、即時報價收盤後
+# 完全是死的，非交易時間仍每 5 分鐘照打只是白白增加撞到 502 的機會。視窗刻意
+# 比實際盤中（09:00-13:30）寬一點，含開盤前熱身跟收盤後資料入帳的緩衝；國定
+# 假日沒有另外排除（不維護假日曆），該天照樣會在視窗內打，STOCK_DAY 遇到休市
+# 一樣能正常查到最近一個交易日的資料，不影響正確性，只是多打幾次。
+TAIPEI_TZ = ZoneInfo("Asia/Taipei")
+TWSE_SESSION_START = time(8, 30)
+TWSE_SESSION_END = time(14, 30)
 
 
 def _compute_indicators(closes: list[float], pullback_scale: float = 1.0) -> dict:
@@ -918,26 +931,73 @@ def _fetch_published_notify_state() -> dict[str, dict]:
         return {}
 
 
+def _is_twse_trading_session(now: datetime) -> bool:
+    """`now` 是否落在 TWSE 平日交易時段附近（含開盤前／收盤後緩衝）。"""
+    local = now.astimezone(TAIPEI_TZ)
+    if local.weekday() >= 5:  # 5=Sat, 6=Sun
+        return False
+    return TWSE_SESSION_START <= local.time() <= TWSE_SESSION_END
+
+
+def _fetch_published_site_data() -> dict:
+    """讀回已公開的 gold_site.json；抓不到就回傳空字典，呼叫端自行處理。"""
+    try:
+        response = requests.get(PUBLISHED_SITE_DATA_URL, timeout=10)
+        if response.status_code != 200:
+            return {}
+        return response.json()
+    except (requests.RequestException, ValueError):
+        return {}
+
+
 def main() -> None:
     now = datetime.now(UTC).astimezone()
     year, month = now.year, now.month
+    twse_trading_session = _is_twse_trading_session(now)
 
+    published_site_data: dict | None = None
+
+    def _published_target(code: str) -> dict | None:
+        nonlocal published_site_data
+        if published_site_data is None:
+            published_site_data = _fetch_published_site_data()
+        return published_site_data.get("targets", {}).get(code)
+
+    # 非交易時間直接跳過 TWSE 即時抓取，改沿用上次成功發布的該標的資料；交易
+    # 時間內如果真的抓不到（例如 TWSE 短暫整個掛掉），一樣退回上次發布的資料，
+    # 不讓整個網站建置流程崩潰——只有連上次發布的資料都沒有（例如第一次執行）
+    # 才真的視為無法處理而中止。
     twse_bars: dict[str, list[DailyBar]] = {}
+    stale_targets: dict[str, dict] = {}
     for code in TARGET_META:
-        bars = _fetch_bars_with_fallback(code, year, month)
-        if not bars:
-            raise RuntimeError(f"{code}: no TWSE bars fetched for the requested months")
-        twse_bars[code] = bars
+        bars = (
+            _fetch_bars_with_fallback(code, year, month) if twse_trading_session else []
+        )
+        if bars:
+            twse_bars[code] = bars
+            continue
+        published = _published_target(code)
+        if published is None:
+            raise RuntimeError(
+                f"{code}: no TWSE bars fetched for the requested months and no "
+                "previously published data to fall back to"
+            )
+        stale_targets[code] = published
 
     macro_gold = fetch_series("GC=F", DATA_CACHE_DIR / "gc_f.json")
     macro_fx = fetch_series("USDTWD=X", DATA_CACHE_DIR / "usdtwd.json")
 
-    twse_realtime = {code: fetch_realtime_quote(code) for code in TARGET_META}
+    twse_realtime = (
+        {code: fetch_realtime_quote(code) for code in twse_bars}
+        if twse_trading_session
+        else {}
+    )
     intl_gold_realtime = fetch_latest_price("GC=F")
 
     payload = build_payload(
         twse_bars, macro_gold, macro_fx, now, twse_realtime, intl_gold_realtime
     )
+    payload["targets"].update(stale_targets)
 
     (SITE_DIR / "data").mkdir(parents=True, exist_ok=True)
     (SITE_DIR / "data" / "gold_site.json").write_text(

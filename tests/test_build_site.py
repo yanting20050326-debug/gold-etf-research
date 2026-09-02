@@ -1,5 +1,5 @@
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -519,3 +519,66 @@ def test_fetch_bars_with_fallback_skips_prior_month_when_current_has_enough():
     finally:
         build_site_module.fetch_month = original
     assert result == current_bars
+
+
+def _taipei_datetime(year, month, day, hour, minute) -> datetime:
+    # Asia/Taipei is a fixed UTC+8 offset (no DST), so building the UTC
+    # instant directly avoids depending on the system tzdata database.
+    return datetime(year, month, day, hour, minute, tzinfo=UTC) - timedelta(hours=8)
+
+
+def test_is_twse_trading_session_true_during_session_on_a_weekday():
+    # 2026-09-01 is a Tuesday; 10:00 Taipei time is inside the trading window.
+    now = _taipei_datetime(2026, 9, 1, 10, 0)
+    assert build_site_module._is_twse_trading_session(now) is True
+
+
+def test_is_twse_trading_session_false_before_session_opens():
+    now = _taipei_datetime(2026, 9, 1, 7, 0)
+    assert build_site_module._is_twse_trading_session(now) is False
+
+
+def test_is_twse_trading_session_false_after_session_closes():
+    now = _taipei_datetime(2026, 9, 1, 20, 0)
+    assert build_site_module._is_twse_trading_session(now) is False
+
+
+def test_is_twse_trading_session_false_on_weekend():
+    # 2026-09-05 is a Saturday, even though the time-of-day is mid-session.
+    now = _taipei_datetime(2026, 9, 5, 10, 0)
+    assert build_site_module._is_twse_trading_session(now) is False
+
+
+def test_fetch_published_site_data_returns_empty_dict_on_network_error(monkeypatch):
+    import requests
+
+    def raise_connection_error(url, timeout):
+        raise requests.ConnectionError("network down")
+
+    monkeypatch.setattr(build_site_module.requests, "get", raise_connection_error)
+    assert build_site_module._fetch_published_site_data() == {}
+
+
+def test_fetch_published_site_data_returns_empty_dict_on_non_200(monkeypatch):
+    class FakeResponse:
+        status_code = 404
+
+    monkeypatch.setattr(
+        build_site_module.requests, "get", lambda url, timeout: FakeResponse()
+    )
+    assert build_site_module._fetch_published_site_data() == {}
+
+
+def test_fetch_published_site_data_returns_parsed_json_on_success(monkeypatch):
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {"targets": {"00635U": {"code": "00635U"}}}
+
+    monkeypatch.setattr(
+        build_site_module.requests, "get", lambda url, timeout: FakeResponse()
+    )
+    assert build_site_module._fetch_published_site_data() == {
+        "targets": {"00635U": {"code": "00635U"}}
+    }
