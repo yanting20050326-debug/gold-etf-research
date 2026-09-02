@@ -193,6 +193,33 @@ def test_fetch_realtime_quote_falls_back_to_previous_close_when_unmatched(
     assert quote.price == 48.07
 
 
+def test_fetch_realtime_quote_falls_back_when_z_is_a_literal_dash(monkeypatch):
+    # TWSE's real sentinel for "no trade matched yet" is the literal string
+    # "-", not an empty string — confirmed against a live response. "-" is
+    # truthy in Python, so a naive `row.get("z") or row.get("y")` fallback
+    # would never actually trigger and float("-") would raise.
+    sample_payload = {
+        "msgArray": [
+            {"c": "00635U", "z": "-", "y": "45.8000", "d": "20260902", "t": "-"}
+        ],
+        "rtmessage": "OK",
+    }
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return sample_payload
+
+    monkeypatch.setattr(
+        "gold_research.fetch_twse.requests.get",
+        lambda url, params, headers, timeout: FakeResponse(),
+    )
+    quote = fetch_realtime_quote("00635U")
+    assert quote.price == 45.80
+
+
 def test_fetch_realtime_quote_returns_none_on_bad_status(monkeypatch):
     class FakeResponse:
         def raise_for_status(self):

@@ -109,8 +109,12 @@ def fetch_realtime_quote(stock_no: str) -> RealtimeQuote | None:
             return None
         row = rows[0]
         previous_close = float(row["y"])
-        price_str = row.get("z") or row.get("y")
-        if not price_str:
+        # TWSE 用字面上的 "-" 代表「今天還沒有成交價」，不是空字串；"-" 在
+        # Python 是真值，`row.get("z") or row.get("y")` 這種寫法不會真的
+        # fallback 到 y，所以要先把 "-" 明確擋掉再判斷。
+        z_value = row.get("z")
+        price_str = z_value if z_value and z_value != "-" else row.get("y")
+        if not price_str or price_str == "-":
             return None
         return RealtimeQuote(
             code=row.get("c", stock_no),

@@ -491,11 +491,18 @@ function markPageUpdatedNow() {
   if (el) el.textContent = formatClock(new Date());
 }
 
+function latestCheckedDate() {
+  const candidates = [SITE_DATA.generated_at, SITE_DATA.live_quotes_generated_at]
+    .filter(Boolean)
+    .map((iso) => new Date(iso))
+    .filter((d) => !isNaN(d.getTime()));
+  if (candidates.length === 0) return null;
+  return new Date(Math.max(...candidates.map((d) => d.getTime())));
+}
+
 function formatBuildCheckedTime() {
-  if (!SITE_DATA.generated_at) return null;
-  const date = new Date(SITE_DATA.generated_at);
-  if (isNaN(date.getTime())) return null;
-  return formatClock(date);
+  const date = latestCheckedDate();
+  return date ? formatClock(date) : null;
 }
 
 function sparklinePath(points, width, height, padding) {
@@ -817,16 +824,17 @@ function refreshLiveQuotes() {
   fetch("data/live_quotes.json?ts=" + Date.now())
     .then((res) => (res.ok ? res.json() : null))
     .then((fresh) => {
-      if (!fresh || !fresh.quotes) return;
-      let changed = false;
-      Object.keys(fresh.quotes).forEach((code) => {
-        const target = SITE_DATA.targets[code];
-        if (target) {
-          Object.assign(target.latest, fresh.quotes[code]);
-          changed = true;
-        }
-      });
-      if (changed && currentTargetCode) renderTarget(currentTargetCode);
+      if (!fresh) return;
+      SITE_DATA.live_quotes_generated_at = fresh.generated_at;
+      if (fresh.quotes) {
+        Object.keys(fresh.quotes).forEach((code) => {
+          const target = SITE_DATA.targets[code];
+          if (target) Object.assign(target.latest, fresh.quotes[code]);
+        });
+      }
+      // 就算這次沒有任何標的的報價值真的變，查核時間本身也是新的，
+      // 一律重繪目前分頁，讓「查核仍為最新」的時間跟著這次輪詢往前走。
+      if (currentTargetCode) renderTarget(currentTargetCode);
       markPageUpdatedNow();
     })
     .catch(() => {});
