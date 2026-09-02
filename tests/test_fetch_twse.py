@@ -95,6 +95,37 @@ def test_fetch_month_raises_on_bad_stat(monkeypatch):
         fetch_month("00635U", 2020, 1)
 
 
+def test_fetch_month_raises_twse_fetch_error_on_bad_gateway(monkeypatch):
+    import requests
+
+    class FakeResponse:
+        def raise_for_status(self):
+            raise requests.HTTPError("502 Server Error: Bad Gateway")
+
+    monkeypatch.setattr(
+        "gold_research.fetch_twse.requests.get",
+        lambda url, params, timeout: FakeResponse(),
+    )
+    with pytest.raises(TwseFetchError):
+        fetch_month("00635U", 2026, 8)
+
+
+def test_fetch_month_raises_twse_fetch_error_on_empty_body(monkeypatch):
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            raise ValueError("Expecting value: line 1 column 1 (char 0)")
+
+    monkeypatch.setattr(
+        "gold_research.fetch_twse.requests.get",
+        lambda url, params, timeout: FakeResponse(),
+    )
+    with pytest.raises(TwseFetchError):
+        fetch_month("00635U", 2026, 8)
+
+
 def test_fetch_month_skips_unparseable_row(monkeypatch):
     sample_payload = {
         "stat": "OK",

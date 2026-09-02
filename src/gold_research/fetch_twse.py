@@ -42,15 +42,23 @@ class TwseFetchError(Exception):
 
 
 def fetch_month(stock_no: str, year: int, month: int) -> list[DailyBar]:
-    """抓 `stock_no`（例如 '00635U'）在 `year`-`month` 這個月份的日線資料。"""
+    """抓 `stock_no`（例如 '00635U'）在 `year`-`month` 這個月份的日線資料。
+
+    TWSE 偶發 502/503 或回傳空 body，一律轉成 TwseFetchError——呼叫端
+    （build_site._fetch_bars_with_fallback）本來就把它當「這個月抓不到」
+    來 fallback，不轉換的話這種暫時性上游錯誤會讓整個建置流程崩潰。
+    """
     query_date = f"{year:04d}{month:02d}01"
-    response = requests.get(
-        STOCK_DAY_URL,
-        params={"response": "json", "date": query_date, "stockNo": stock_no},
-        timeout=10,
-    )
-    response.raise_for_status()
-    payload = response.json()
+    try:
+        response = requests.get(
+            STOCK_DAY_URL,
+            params={"response": "json", "date": query_date, "stockNo": stock_no},
+            timeout=10,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        raise TwseFetchError(f"TWSE STOCK_DAY 請求失敗：{exc}") from exc
     if payload.get("stat") != "OK":
         raise TwseFetchError(f"TWSE STOCK_DAY 回傳 stat={payload.get('stat')!r}")
 
