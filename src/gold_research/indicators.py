@@ -195,17 +195,43 @@ def pullback_stage(
     }
 
 
+def dynamic_swing_span(
+    closes: list[float],
+    base_span: int = 3,
+    min_span: int = 2,
+    max_span: int = 6,
+    short_window: int = 5,
+    long_window: int = 20,
+) -> int:
+    """依近期波動率（相對於較長期基準）調整判斷局部低點要看前後幾天。
+
+    行情變溫和時，固定天數的比較窗格容易「跨過」中間比較淺的短暫回檔，
+    誤選到更早、更深但比較不相關的舊低點；行情變劇烈時，太窄的窗格又
+    容易把正常的單日雜訊誤判成起漲點。用既有的 volatility_squeeze
+    比值（近期波動 / 長期波動）等比例縮放天數，資料不足算不出比值時
+    直接用 base_span。
+    """
+    vs = volatility_squeeze(closes, short_window, long_window)
+    if vs["ratio"] is None:
+        return base_span
+    span = round(base_span * vs["ratio"])
+    return max(min_span, min(max_span, span))
+
+
 def prior_swing_low(
-    closes: list[float], window: int = 30, swing_span: int = 3
+    closes: list[float], window: int = 30, swing_span: int | None = None
 ) -> dict[str, float | int] | None:
     """找近 window 天高點之前，最近一次的起漲低點（前後 swing_span 天都不比它低）。
 
     這是判斷「跌破重要前低」紀律用的參考點：先定位近 window 天高點，
     再往回找高點之前最近一個局部低點，也就是這波上漲行情大概是從哪裡起漲的。
     找不到符合條件的低點（例如整段區間一路上漲、沒有明顯回檔）時回傳 None。
+    swing_span 沒指定時，依 dynamic_swing_span() 依當下波動率自動調整。
     """
     if len(closes) < window:
         return None
+    if swing_span is None:
+        swing_span = dynamic_swing_span(closes)
     segment = closes[-window:]
     high_offset = segment.index(max(segment))
     high_idx = len(closes) - window + high_offset

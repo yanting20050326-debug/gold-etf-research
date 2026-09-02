@@ -3,6 +3,7 @@ import pytest
 from gold_research.indicators import (
     bollinger_bands,
     divergence_flag,
+    dynamic_swing_span,
     exponential_moving_average,
     macd,
     macd_golden_cross,
@@ -241,6 +242,59 @@ def test_prior_swing_low_returns_none_without_a_local_minimum():
 
 def test_prior_swing_low_insufficient_data():
     assert prior_swing_low([100.0] * 10, window=30) is None
+
+
+def test_dynamic_swing_span_shrinks_when_recent_volatility_is_compressed():
+    # 前 16 天有明顯波動，最後 5 天完全持平 -> 近期波動率遠低於基準，
+    # span 應該縮小，比較能抓到淺一點的回檔。
+    volatile = [100, 95, 105, 92, 108, 90, 110, 88, 112, 86, 114, 84, 116, 82, 118, 96]
+    flat = [118, 118, 118, 118, 118]
+    closes = volatile + flat
+    span = dynamic_swing_span(closes, base_span=3, min_span=1, max_span=6)
+    assert span < 3
+
+
+def test_dynamic_swing_span_grows_when_recent_volatility_is_expanding():
+    # 前 16 天持平，最後 5 天劇烈震盪 -> 近期波動率遠高於基準，
+    # span 應該放大，避免把正常的日內雜訊誤判成起漲低點。
+    flat = [100.0] * 16
+    volatile = [100, 90, 110, 80, 120]
+    closes = flat + volatile
+    span = dynamic_swing_span(closes, base_span=3, min_span=1, max_span=6)
+    assert span > 3
+
+
+def test_dynamic_swing_span_falls_back_to_base_with_insufficient_data():
+    # 不夠 20 天算不出 volatility_squeeze 的 ratio，直接用基準值。
+    span = dynamic_swing_span([100.0] * 10, base_span=3)
+    assert span == 3
+
+
+def test_dynamic_swing_span_respects_bounds():
+    volatile = [100, 95, 105, 92, 108, 90, 110, 88, 112, 86, 114, 84, 116, 82, 118, 96]
+    flat = [118, 118, 118, 118, 118]
+    closes = volatile + flat
+    span = dynamic_swing_span(closes, base_span=3, min_span=2, max_span=6)
+    assert span >= 2
+
+
+def test_prior_swing_low_uses_dynamic_span_when_volatility_recently_compressed():
+    # 「兩次回檔、中間小反彈」的結構：一次比較深、比較舊（70），
+    # 一次比較淺、比較新（75），但固定 span=3 的比較窗格會「跨過」
+    # 中間的小反彈，選到比較舊、比較深的低點。真實案例（00635U）
+    # 就是這樣：近期波動率轉穩定時，動態 span 縮小，才會改抓到比較
+    # 新、更貼近這波真正起漲點的低點。
+    decline = [100 - i * 2 for i in range(15)]  # 100 一路跌到 72
+    deep_dip = [70]  # 比較深、比較舊的低點
+    bounce = [76, 78]  # 小反彈
+    shallow_dip = [75]  # 比較淺、比較新的低點
+    rally = [75.0 + i * 3 for i in range(1, 12)]  # 波動壓縮、平穩漲到新高 108
+    closes = decline + deep_dip + bounce + shallow_dip + rally
+    fixed_span3 = prior_swing_low(closes, window=30, swing_span=3)
+    dynamic = prior_swing_low(closes, window=30)
+    assert fixed_span3["price"] == pytest.approx(70.0)
+    assert dynamic["price"] == pytest.approx(75.0)
+    assert dynamic["days_before_high"] < fixed_span3["days_before_high"]
 
 
 def test_trend_still_intact_true_when_above_both_references():
