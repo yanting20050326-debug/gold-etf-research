@@ -84,6 +84,19 @@ def _roc_to_iso(roc_date: str) -> str:
     return f"{int(year_str) + 1911:04d}-{int(month_str):02d}-{int(day_str):02d}"
 
 
+def _best_book_price(book_str: str | None) -> float | None:
+    """從 TWSE 的五檔報價字串（用底線分隔，第一個是最佳價）取出最佳價。"""
+    if not book_str:
+        return None
+    first = book_str.split("_")[0]
+    if not first or first == "-":
+        return None
+    try:
+        return float(first)
+    except ValueError:
+        return None
+
+
 def fetch_realtime_quote(stock_no: str) -> RealtimeQuote | None:
     """抓 `stock_no` 的盤中即時報價；抓不到、格式異常、或非交易時段一律回傳 None。
 
@@ -111,14 +124,25 @@ def fetch_realtime_quote(stock_no: str) -> RealtimeQuote | None:
         previous_close = float(row["y"])
         # TWSE 用字面上的 "-" 代表「今天還沒有成交價」，不是空字串；"-" 在
         # Python 是真值，`row.get("z") or row.get("y")` 這種寫法不會真的
-        # fallback 到 y，所以要先把 "-" 明確擋掉再判斷。
+        # fallback。有些冷門標的（例如 00635U）整天都不會填 z，即使買賣
+        # 報價明明是活的，這時候退回昨收價會顯示一個完全不會動、跟現在
+        # 市場脫節的舊數字；改用買一買二的中間價當現價，比昨收價準得多。
         z_value = row.get("z")
-        price_str = z_value if z_value and z_value != "-" else row.get("y")
-        if not price_str or price_str == "-":
-            return None
+        if z_value and z_value != "-":
+            price = float(z_value)
+        else:
+            best_ask = _best_book_price(row.get("a"))
+            best_bid = _best_book_price(row.get("b"))
+            if best_ask is not None and best_bid is not None:
+                price = (best_ask + best_bid) / 2
+            else:
+                y_value = row.get("y")
+                if not y_value or y_value == "-":
+                    return None
+                price = float(y_value)
         return RealtimeQuote(
             code=row.get("c", stock_no),
-            price=float(price_str),
+            price=price,
             previous_close=previous_close,
             quote_date=row.get("d", ""),
             quote_time=row.get("t", ""),

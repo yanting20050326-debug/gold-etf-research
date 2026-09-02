@@ -220,6 +220,43 @@ def test_fetch_realtime_quote_falls_back_when_z_is_a_literal_dash(monkeypatch):
     assert quote.price == 45.80
 
 
+def test_fetch_realtime_quote_uses_bid_ask_midpoint_when_z_is_dash(monkeypatch):
+    # Some low-volume TWSE securities never populate "z" (last matched
+    # trade) through this endpoint even while actively trading — confirmed
+    # live for 00635U on a day it had clearly moved (open/high/low all set,
+    # bid/ask live) but z stayed "-" all session. Falling back straight to
+    # yesterday's close there would silently show a frozen, wrong price;
+    # the bid/ask midpoint tracks the real market far more closely.
+    sample_payload = {
+        "msgArray": [
+            {
+                "c": "00635U",
+                "z": "-",
+                "y": "45.8000",
+                "a": "44.5600_44.5700_44.5800_44.5900_44.6000_",
+                "b": "44.5400_44.5300_44.5200_44.5100_44.5000_",
+                "d": "20260902",
+                "t": "12:48:05",
+            }
+        ],
+        "rtmessage": "OK",
+    }
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return sample_payload
+
+    monkeypatch.setattr(
+        "gold_research.fetch_twse.requests.get",
+        lambda url, params, headers, timeout: FakeResponse(),
+    )
+    quote = fetch_realtime_quote("00635U")
+    assert quote.price == pytest.approx(44.55)
+
+
 def test_fetch_realtime_quote_returns_none_on_bad_status(monkeypatch):
     class FakeResponse:
         def raise_for_status(self):
