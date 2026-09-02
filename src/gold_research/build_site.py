@@ -481,12 +481,21 @@ function renderDisclaimer() {
   document.getElementById("disclaimer").textContent = SITE_DATA.disclaimer;
 }
 
-function markPageUpdatedNow() {
+function formatClock(date) {
   const pad = (n) => String(n).padStart(2, "0");
-  const now = new Date();
-  const timeText = pad(now.getHours()) + ":" + pad(now.getMinutes()) + ":" + pad(now.getSeconds());
+  return pad(date.getHours()) + ":" + pad(date.getMinutes()) + ":" + pad(date.getSeconds());
+}
+
+function markPageUpdatedNow() {
   const el = document.getElementById("page-updated-time");
-  if (el) el.textContent = timeText;
+  if (el) el.textContent = formatClock(new Date());
+}
+
+function formatBuildCheckedTime() {
+  if (!SITE_DATA.generated_at) return null;
+  const date = new Date(SITE_DATA.generated_at);
+  if (isNaN(date.getTime())) return null;
+  return formatClock(date);
 }
 
 function sparklinePath(points, width, height, padding) {
@@ -724,7 +733,9 @@ function renderTarget(code) {
     priceLine.appendChild(dot);
     priceLine.appendChild(document.createTextNode("現在：" + fmt(target.latest.close, 2) + "（" + target.latest.quote_time + " 盤中，非官方公告價）"));
   } else {
-    priceLine.appendChild(document.createTextNode("最新收盤：" + fmt(target.latest.close, 2) + "（" + target.latest.trading_date + "，非即時）"));
+    const checkedTime = formatBuildCheckedTime();
+    const checkedNote = checkedTime ? "，" + checkedTime + " 查核仍為最新" : "";
+    priceLine.appendChild(document.createTextNode("最新收盤：" + fmt(target.latest.close, 2) + "（" + target.latest.trading_date + "，非即時" + checkedNote + "）"));
   }
   card.appendChild(priceLine);
   if (target.quote_delay_note) {
