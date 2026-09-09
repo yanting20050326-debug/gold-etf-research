@@ -1,0 +1,56 @@
+name: Deploy gold-etf-research site
+
+on:
+  # 排程觸發由 trigger-worker（Cloudflare Cron Triggers）呼叫下面的
+  # workflow_dispatch 負責——GitHub 自己的 schedule: 不只不準時，兩者同時
+  # 存在還會疊加成雙倍觸發量。這個 repo 本身現在就是公開的，Actions 分鐘數
+  # 免費不限量，但排程還是照交易時段調整過的頻率跑，沒必要浪費資源。
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    env:
+      HAS_SITE_PAT: ${{ secrets.GOLD_RESEARCH_SITE_PAT != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install dependencies
+        run: uv sync --all-groups
+
+      - name: Build site
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+        run: |
+          uv run python -m gold_research.update_quotes
+          uv run python -m gold_research.build_site
+
+      # 建置完的靜態網頁另外推到公開的 yanting20050326-debug/gold-research-site
+      # (https://yanting20050326-debug.github.io/gold-research-site/)，維持跟
+      # 拆分前一致的公開網址，不用搬家。需要一組有該 repo 寫入權限的 PAT，
+      # 存在這個 repo 的 Settings > Secrets > Actions，命名為
+      # GOLD_RESEARCH_SITE_PAT——這組 token 只有人類能在
+      # github.com/settings/tokens 建立，還沒設定前這個步驟會被跳過。
+      - name: Publish to public gold-research-site repo
+        if: ${{ env.HAS_SITE_PAT == 'true' }}
+        env:
+          GOLD_RESEARCH_SITE_PAT: ${{ secrets.GOLD_RESEARCH_SITE_PAT }}
+        run: |
+          git clone "https://${GOLD_RESEARCH_SITE_PAT}@github.com/yanting20050326-debug/gold-research-site.git" /tmp/gold-research-site
+          rm -rf /tmp/gold-research-site/*
+          cp -r site/. /tmp/gold-research-site/
+          cd /tmp/gold-research-site
+          git config user.name "gold-research-site-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --staged --quiet && echo "no changes" || git commit -m "chore: auto-update site $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push origin main
