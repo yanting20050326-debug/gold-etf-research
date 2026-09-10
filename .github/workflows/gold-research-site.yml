@@ -7,7 +7,12 @@ on:
   # 免費不限量，但排程還是照交易時段調整過的頻率跑，沒必要浪費資源。
   push:
     branches: [main]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      force_fetch:
+        description: "忽略交易時段限制，強制抓一次 TWSE 最新資料（手動補資料用）"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -30,6 +35,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          FORCE_TWSE_FETCH: ${{ github.event.inputs.force_fetch }}
         run: |
           uv run python -m gold_research.update_quotes
           uv run python -m gold_research.build_site

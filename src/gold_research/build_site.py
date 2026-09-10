@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from dataclasses import asdict
 from datetime import UTC, date, datetime, time
@@ -939,6 +940,15 @@ def _is_twse_trading_session(now: datetime) -> bool:
     return TWSE_SESSION_START <= local.time() <= TWSE_SESSION_END
 
 
+def should_fetch_twse(now: datetime) -> bool:
+    """是否該真的去打 TWSE——交易時段內，或手動設定 FORCE_TWSE_FETCH 強制補資料時。
+
+    build_site.py、update_quotes.py 都要用同一套判斷，共用這裡避免兩邊各自
+    重複、之後又不小心漏改其中一邊。
+    """
+    return _is_twse_trading_session(now) or os.environ.get("FORCE_TWSE_FETCH") == "true"
+
+
 def _fetch_published_site_data() -> dict:
     """讀回已公開的 gold_site.json；抓不到就回傳空字典，呼叫端自行處理。"""
     try:
@@ -953,7 +963,7 @@ def _fetch_published_site_data() -> dict:
 def main() -> None:
     now = datetime.now(UTC).astimezone()
     year, month = now.year, now.month
-    twse_trading_session = _is_twse_trading_session(now)
+    twse_trading_session = should_fetch_twse(now)
 
     published_site_data: dict | None = None
 

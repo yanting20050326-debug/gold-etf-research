@@ -13,7 +13,12 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from gold_research.build_site import INTL_GOLD_CODE, SITE_DIR, TARGET_META
+from gold_research.build_site import (
+    INTL_GOLD_CODE,
+    SITE_DIR,
+    TARGET_META,
+    should_fetch_twse,
+)
 from gold_research.fetch_macro import LatestQuote, fetch_latest_price
 from gold_research.fetch_twse import RealtimeQuote, fetch_realtime_quote
 
@@ -42,7 +47,11 @@ def build_live_quotes_payload(
 
 def main() -> None:
     generated_at = datetime.now(UTC).astimezone()
-    twse_realtime = {code: fetch_realtime_quote(code) for code in TARGET_META}
+    twse_realtime = (
+        {code: fetch_realtime_quote(code) for code in TARGET_META}
+        if should_fetch_twse(generated_at)
+        else {}
+    )
     intl_gold_realtime = fetch_latest_price("GC=F")
     payload = build_live_quotes_payload(twse_realtime, intl_gold_realtime, generated_at)
 
