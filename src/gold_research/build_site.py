@@ -974,24 +974,30 @@ def main() -> None:
         return published_site_data.get("targets", {}).get(code)
 
     # 非交易時間直接跳過 TWSE 即時抓取，改沿用上次成功發布的該標的資料；交易
-    # 時間內如果真的抓不到（例如 TWSE 短暫整個掛掉），一樣退回上次發布的資料，
-    # 不讓整個網站建置流程崩潰——只有連上次發布的資料都沒有（例如第一次執行）
-    # 才真的視為無法處理而中止。
+    # 時間內如果真的抓不到、或抓到的天數不夠算 30 天指標（例如往回抓 3 個月
+    # fallback 時剛好每個月都撞到 TWSE 502，只湊到當月幾天），一樣退回上次
+    # 發布的資料，不讓網站從「完整歷史」退化成「資料不足」——只有連上次發布
+    # 的資料都沒有（例如第一次執行）才會將就用這次抓到的不完整資料，總比
+    # 完全沒有東西可顯示好。
+    MIN_BARS_FOR_INDICATORS = 30
     twse_bars: dict[str, list[DailyBar]] = {}
     stale_targets: dict[str, dict] = {}
     for code in TARGET_META:
         bars = (
             _fetch_bars_with_fallback(code, year, month) if twse_trading_session else []
         )
-        if bars:
+        if len(bars) >= MIN_BARS_FOR_INDICATORS:
             twse_bars[code] = bars
             continue
         published = _published_target(code)
         if published is None:
-            raise RuntimeError(
-                f"{code}: no TWSE bars fetched for the requested months and no "
-                "previously published data to fall back to"
-            )
+            if not bars:
+                raise RuntimeError(
+                    f"{code}: no TWSE bars fetched for the requested months and no "
+                    "previously published data to fall back to"
+                )
+            twse_bars[code] = bars
+            continue
         stale_targets[code] = published
 
     macro_gold = fetch_series("GC=F", DATA_CACHE_DIR / "gc_f.json")
