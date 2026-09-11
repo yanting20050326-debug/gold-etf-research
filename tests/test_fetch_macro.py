@@ -164,7 +164,12 @@ def test_fetch_latest_price_returns_last_non_null_close(monkeypatch):
     # timestamp overall — index 1's null must be skipped correctly.
     assert isinstance(quote, LatestQuote)
     assert quote.price == 2051.4
-    assert quote.quote_time  # non-empty; exact format is timezone-dependent
+    # Always Taipei time regardless of the runner's own system timezone
+    # (GitHub Actions defaults to UTC) — a bare .astimezone() used to leak
+    # that ambient timezone straight into the displayed quote time with no
+    # label, showing up as a confusing hour offset next to TWSE's
+    # already-Taipei-local realtime quotes on the same page.
+    assert quote.quote_time == "2025-08-24 09:48"
 
 
 def test_fetch_latest_price_returns_none_when_all_closes_null(monkeypatch):

@@ -11,9 +11,12 @@ import json
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import requests
 from loguru import logger
+
+TAIPEI_TZ = ZoneInfo("Asia/Taipei")
 
 CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
 
@@ -139,9 +142,12 @@ def fetch_latest_price(symbol: str) -> LatestQuote | None:
 
 
 def _timestamp_to_datetime(timestamp: int) -> str:
+    # 明確轉成台北時區——GitHub Actions runner 的系統時區是 UTC，裸用
+    # .astimezone() 會顯示無時區標示的 UTC 時間，跟頁面上其他報價（TWSE
+    # 即時報價本來就是台灣時間）擺在一起會顯得像資料過期或時間錯亂。
     return (
         datetime.fromtimestamp(timestamp, tz=UTC)
-        .astimezone()
+        .astimezone(TAIPEI_TZ)
         .strftime("%Y-%m-%d %H:%M")
     )
 
