@@ -391,7 +391,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8" />
-<title>黃金相關研究</title>
+<title>金羅盤</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
   :root {
@@ -460,7 +460,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <body>
   <div class="shell">
   <p class="source-note"><a href="index.html">← 封面</a></p>
-  <h1>黃金相關研究</h1>
+  <h1>金羅盤</h1>
   <div class="disclaimer" id="disclaimer"></div>
   <p class="source-note" id="page-updated-line">頁面最後更新：<span id="page-updated-time">--:--:--</span></p>
   <div class="tab-bar" id="target-tabs"></div>
