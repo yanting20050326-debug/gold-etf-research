@@ -111,7 +111,7 @@ def check_and_notify(
 ) -> dict[str, dict]:
     """比對每個標的目前的回檔階段跟前一次記錄的狀態，決定是否要發通知。
 
-    回傳更新後的 state（每個標的目前的階段與是否已跌破前低），
+    回傳更新後的 state（每個標的目前的階段與目前的起漲前低價），
     呼叫端負責寫檔持久化，下次執行時再讀回來當作 previous_state。
     """
     new_state: dict[str, dict] = {}
@@ -131,18 +131,33 @@ def check_and_notify(
                 )
             )
 
-        broke_prior_low = prev.get("broke_prior_low", False)
+        # prior_low 現在是「目前仍然有效、還沒被跌破的低點」（見
+        # indicators.prior_swing_low），一旦真的跌破，當次執行就會馬上換成
+        # 新的、更低的參考點，不會有「今天收盤 <= 這次算出來的 prior_low」
+        # 的時刻——跌破那一刻，prior_low 本身已經不是原來那個值了。所以
+        # 破位偵測要看的是「這次的 prior_low 價格，比上次記錄的低」，這才
+        # 代表舊的參考點剛剛被跌破、換成新的。
         prior_low = indicators.get("prior_low")
-        latest_close = target.get("latest", {}).get("close")
-        if prior_low is not None and latest_close is not None:
-            now_broken = latest_close <= prior_low["price"]
-            if now_broken and not broke_prior_low:
+        previous_prior_low_price = prev.get("prior_low_price")
+        if (
+            prior_low is not None
+            and previous_prior_low_price is not None
+            and prior_low["price"] < previous_prior_low_price
+        ):
+            latest_close = target.get("latest", {}).get("close")
+            if latest_close is not None:
                 send_line_broadcast(
                     build_prior_low_break_message(
-                        target["display_name"], prior_low["price"], latest_close
+                        target["display_name"], previous_prior_low_price, latest_close
                     )
                 )
-            broke_prior_low = now_broken
 
-        new_state[code] = {"stage": stage, "broke_prior_low": broke_prior_low}
+        new_state[code] = {
+            "stage": stage,
+            "prior_low_price": (
+                prior_low["price"]
+                if prior_low is not None
+                else previous_prior_low_price
+            ),
+        }
     return new_state

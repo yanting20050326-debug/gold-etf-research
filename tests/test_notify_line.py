@@ -106,7 +106,7 @@ def test_send_line_broadcast_returns_false_on_request_failure(monkeypatch):
 def test_read_write_notify_state_roundtrip(tmp_path):
     path = tmp_path / "notify_state.json"
     assert read_notify_state(path) == {}
-    state = {"00635U": {"stage": "第一筆 20%", "broke_prior_low": False}}
+    state = {"00635U": {"stage": "第一筆 20%", "prior_low_price": 44.0}}
     write_notify_state(path, state)
     assert read_notify_state(path) == state
 
@@ -138,7 +138,7 @@ def test_check_and_notify_sends_and_updates_state_on_stage_transition(monkeypatc
     assert len(sent) == 1
     assert "元大S&P黃金" in sent[0]
     assert new_state["00635U"]["stage"] == "第一筆 20%"
-    assert new_state["00635U"]["broke_prior_low"] is False
+    assert new_state["00635U"]["prior_low_price"] == 44.0
 
 
 def test_check_and_notify_skips_when_stage_unchanged(monkeypatch):
@@ -158,12 +158,17 @@ def test_check_and_notify_skips_when_stage_unchanged(monkeypatch):
             },
         }
     }
-    previous_state = {"00635U": {"stage": "第一筆 20%", "broke_prior_low": False}}
+    previous_state = {"00635U": {"stage": "第一筆 20%", "prior_low_price": 44.0}}
     check_and_notify(targets, previous_state)
     assert sent == []
 
 
 def test_check_and_notify_sends_prior_low_break_once(monkeypatch):
+    # prior_swing_low() now auto-updates to a new, lower reference the
+    # instant its old one gets breached — so "did it break?" is detected by
+    # comparing this run's prior_low price against what was recorded last
+    # time, not by comparing today's close against a price that, by the time
+    # a breach happens, has already moved on to something new.
     sent = []
     monkeypatch.setattr(
         "gold_research.notify_line.send_line_broadcast",
@@ -179,18 +184,20 @@ def test_check_and_notify_sends_prior_low_break_once(monkeypatch):
                     "pullback_pct": 10.0,
                 },
                 "stage_signals": {"macd_golden_cross": False},
-                "prior_low": {"price": 44.0},
+                "prior_low": {"price": 43.0},  # the new, lower reference
             },
         }
     }
     previous_state = {
-        "00635U": {"stage": "加碼 20%（前提：出現止跌）", "broke_prior_low": False}
+        "00635U": {"stage": "加碼 20%（前提：出現止跌）", "prior_low_price": 44.0}
     }
     new_state = check_and_notify(targets, previous_state)
     assert any("跌破" in m for m in sent)
-    assert new_state["00635U"]["broke_prior_low"] is True
+    assert "44" in sent[0]  # names the level that just broke, not the new one
+    assert new_state["00635U"]["prior_low_price"] == 43.0
 
-    # A second run while still broken shouldn't re-send the break alert.
+    # A second run where the reference hasn't dropped further shouldn't
+    # re-send the break alert.
     sent.clear()
     check_and_notify(targets, new_state)
     assert sent == []

@@ -614,7 +614,7 @@ function renderDisciplineCard(target) {
   const pl = target.indicators.prior_low;
   if (pl) {
     wrap.appendChild(el("p", {
-      textContent: "起漲前低（" + pl.days_before_high + " 天前）：" + fmt(pl.price, 2) + "，跌破這裡代表這波漲勢可能已經轉弱。",
+      textContent: "起漲前低（" + pl.days_ago + " 天前）：" + fmt(pl.price, 2) + "，跌破這裡代表這波漲勢可能已經轉弱。",
     }));
   } else {
     wrap.appendChild(el("p", { className: "source-note", textContent: "資料不足，暫時抓不到明確的起漲前低。" }));

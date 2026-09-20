@@ -223,14 +223,36 @@ def test_pullback_stage_insufficient_data():
     assert pullback_stage([100.0] * 10, window=30) is None
 
 
-def test_prior_swing_low_detects_trough_before_recent_high():
-    # Descend to a clear trough at index 9 (111.0), then rally to a new
-    # 30-day high at the last index — the trough is where the rally started.
+def test_prior_swing_low_detects_still_valid_trough():
+    # Descend to a clear trough at index 9 (111.0), then rally without ever
+    # closing back below it — the trough is still standing support.
     closes = [120.0 - i for i in range(10)]
     closes += [111.0 + i for i in range(1, 21)]
     result = prior_swing_low(closes, window=30, swing_span=3)
     assert result["price"] == pytest.approx(111.0)
-    assert result["days_before_high"] == 20
+    assert result["days_ago"] == 20
+
+
+def test_prior_swing_low_skips_a_breached_trough_for_a_more_recent_one():
+    # A first trough at 95 later gets undercut (down to 90) before recovering
+    # — 95 no longer represents standing support, so a subsequent, deeper
+    # trough at 88 that nothing has broken since should be reported instead.
+    closes = [100, 99, 98, 97, 96]  # decline
+    closes += [95]  # trough A — later breached
+    closes += [97, 99, 101]  # bounce
+    closes += [98, 94, 90]  # decline again, undercutting trough A (95)
+    closes += [88]  # trough B — never breached afterward
+    closes += [90 + i * 2 for i in range(18)]  # steady rally, stays above 88
+    result = prior_swing_low(closes, window=30, swing_span=1)
+    assert result["price"] == pytest.approx(88.0)
+    assert result["days_ago"] == 18
+
+
+def test_prior_swing_low_returns_none_when_every_trough_has_been_broken():
+    # A relentless string of ever-lower lows: whichever trough you pick,
+    # something later undercuts it, so there is no still-valid reference.
+    closes = [100.0 - i for i in range(35)]
+    assert prior_swing_low(closes, window=30, swing_span=2) is None
 
 
 def test_prior_swing_low_returns_none_without_a_local_minimum():
@@ -294,7 +316,7 @@ def test_prior_swing_low_uses_dynamic_span_when_volatility_recently_compressed()
     dynamic = prior_swing_low(closes, window=30)
     assert fixed_span3["price"] == pytest.approx(70.0)
     assert dynamic["price"] == pytest.approx(75.0)
-    assert dynamic["days_before_high"] < fixed_span3["days_before_high"]
+    assert dynamic["days_ago"] < fixed_span3["days_ago"]
 
 
 def test_trend_still_intact_true_when_above_both_references():

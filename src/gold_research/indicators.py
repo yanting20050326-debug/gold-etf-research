@@ -221,27 +221,41 @@ def dynamic_swing_span(
 def prior_swing_low(
     closes: list[float], window: int = 30, swing_span: int | None = None
 ) -> dict[str, float | int] | None:
-    """找近 window 天高點之前，最近一次的起漲低點（前後 swing_span 天都不比它低）。
+    """找目前仍然有效（之後沒有任何收盤價跌破過）的最近一次局部低點。
 
-    這是判斷「跌破重要前低」紀律用的參考點：先定位近 window 天高點，
-    再往回找高點之前最近一個局部低點，也就是這波上漲行情大概是從哪裡起漲的。
-    找不到符合條件的低點（例如整段區間一路上漲、沒有明顯回檔）時回傳 None。
-    swing_span 沒指定時，依 dynamic_swing_span() 依當下波動率自動調整。
+    這是判斷「跌破重要前低」紀律用的參考點。局部低點定義：前後 swing_span
+    天都不比它低。從最新一天往回找，候選低點只要之後曾經被更低的收盤價
+    跌破過就跳過、繼續往更早找，直到找到一個至今都還沒被跌破的低點為止；
+    搜尋範圍不額外用 window 天數限制——真正還沒破的支撐，就算是剛好落在
+    window 天之外，本身仍然是有意義的參考價（硬性砍掉 30 天外的資料，
+    反而會在「近期反覆創新低」時找不到任何有效低點、錯誤回報資料不足）。
+
+    這樣設計是刻意的：舊版只找「近期高點之前」的低點，一旦價格創高後又
+    跌破那個舊低點，畫面會一直顯示一個早就失效的支撐價，「跌破這裡代表
+    轉弱」這句話也就跟著失真。現在只要真的跌破，下次執行就會自動換成
+    更新、還沒破的低點——回傳的 days_ago 因此是「距離今天幾個交易日」，
+    不是距離某個特定高點的天數。
+
+    window 只用來把關「資料量夠不夠開始計算」，跟原本的行為一致。找不到
+    符合條件的低點（例如整段區間一路上漲、或反覆創新低沒有守住任何一個
+    低點）時回傳 None。swing_span 沒指定時，依 dynamic_swing_span() 依
+    當下波動率自動調整。
     """
     if len(closes) < window:
         return None
     if swing_span is None:
         swing_span = dynamic_swing_span(closes)
-    segment = closes[-window:]
-    high_offset = segment.index(max(segment))
-    high_idx = len(closes) - window + high_offset
-    for i in range(high_idx - 1, swing_span - 1, -1):
+    n = len(closes)
+    for i in range(n - 1 - swing_span, swing_span - 1, -1):
         left = closes[i - swing_span : i]
         right = closes[i + 1 : i + 1 + swing_span]
         if len(left) < swing_span or len(right) < swing_span:
             continue
-        if closes[i] <= min(left) and closes[i] <= min(right):
-            return {"price": closes[i], "days_before_high": high_idx - i}
+        if not (closes[i] <= min(left) and closes[i] <= min(right)):
+            continue
+        if any(c < closes[i] for c in closes[i + 1 :]):
+            continue  # 之後出現過更低的收盤價，這個低點已經失效
+        return {"price": closes[i], "days_ago": n - 1 - i}
     return None
 
 
