@@ -418,7 +418,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     color: var(--text);
   }
   .shell { max-width: 880px; margin: 0 auto; }
-  h1 { font-size: 32px; font-weight: 700; margin: 0 0 16px; }
+  h1 { font-size: 32px; font-weight: 700; margin: 0 0 4px; }
+  .brand-subtitle { color: var(--gold); font-size: 12px; font-weight: 700; letter-spacing: 0.25em; text-transform: uppercase; margin: 0 0 16px; }
   h2 { font-size: 20px; font-weight: 700; margin: 0 0 8px; }
   h3 { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
   .disclaimer { background: var(--gold-bg); border: 1px solid var(--gold-border); color: #7a4a00; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; }
@@ -461,6 +462,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <div class="shell">
   <p class="source-note"><a href="index.html">← 封面</a></p>
   <h1>金羅盤</h1>
+  <p class="brand-subtitle">Gold Compass</p>
   <div class="disclaimer" id="disclaimer"></div>
   <p class="source-note" id="page-updated-line">頁面最後更新：<span id="page-updated-time">--:--:--</span></p>
   <div class="tab-bar" id="target-tabs"></div>
