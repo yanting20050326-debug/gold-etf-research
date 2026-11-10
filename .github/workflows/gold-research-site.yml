@@ -1,10 +1,16 @@
 name: Deploy gold-etf-research site
 
 on:
-  # Cloudflare remains the frequent trigger. This independent hourly fallback
-  # keeps publishing when the external Worker or its dispatch token stops working.
+  # GitHub owns the refresh schedule; do not depend on the external Worker token.
+  # UTC below = Asia/Taipei minus 8 hours. Schedules may be delayed by GitHub.
   schedule:
-    - cron: '17 * * * *'
+    - cron: '30-59/5 0 * * 1-5'
+    - cron: '*/5 1-5 * * 1-5'
+    - cron: '0-30/5 6 * * 1-5'
+    # Fetch daily bars again at 15:17 and 16:17 Taipei after the close.
+    - cron: '17 7,8 * * 1-5'
+    - cron: '17 9-23 * * 1-5'
+    - cron: '17 * * * 0,6'
   push:
     branches: [main]
   workflow_dispatch:
@@ -48,7 +54,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           LINE_CHANNEL_ACCESS_TOKEN: ${{ github.event_name != 'push' && secrets.LINE_CHANNEL_ACCESS_TOKEN || '' }}
-          FORCE_TWSE_FETCH: ${{ github.event_name == 'push' || github.event.inputs.force_fetch == 'true' }}
+          FORCE_TWSE_FETCH: ${{ github.event_name == 'push' || github.event.inputs.force_fetch == 'true' || github.event.schedule == '17 7,8 * * 1-5' }}
         run: |
           uv run python -m gold_research.update_quotes
           uv run python -m gold_research.build_site
