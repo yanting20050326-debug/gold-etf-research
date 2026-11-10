@@ -1,10 +1,10 @@
 name: Deploy gold-etf-research site
 
 on:
-  # 排程觸發由 trigger-worker（Cloudflare Cron Triggers）呼叫下面的
-  # workflow_dispatch 負責——GitHub 自己的 schedule: 不只不準時，兩者同時
-  # 存在還會疊加成雙倍觸發量。這個 repo 本身現在就是公開的，Actions 分鐘數
-  # 免費不限量，但排程還是照交易時段調整過的頻率跑，沒必要浪費資源。
+  # Cloudflare remains the frequent trigger. This independent hourly fallback
+  # keeps publishing when the external Worker or its dispatch token stops working.
+  schedule:
+    - cron: '17 * * * *'
   push:
     branches: [main]
   workflow_dispatch:
@@ -17,13 +17,26 @@ on:
 permissions:
   contents: read
 
+# Serialize publishers so an older build cannot overwrite a newer deployment.
+concurrency:
+  group: gold-research-site-publish
+  cancel-in-progress: false
+
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       HAS_SITE_PAT: ${{ secrets.GOLD_RESEARCH_SITE_PAT != '' }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Require publishing credentials
+        run: |
+          if [ "$HAS_SITE_PAT" != "true" ]; then
+            echo "::error::GOLD_RESEARCH_SITE_PAT is missing; the site cannot be published."
+            exit 1
+          fi
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
@@ -34,18 +47,21 @@ jobs:
       - name: Build site
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
-          FORCE_TWSE_FETCH: ${{ github.event.inputs.force_fetch }}
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ github.event_name != 'push' && secrets.LINE_CHANNEL_ACCESS_TOKEN || '' }}
+          FORCE_TWSE_FETCH: ${{ github.event_name == 'push' || github.event.inputs.force_fetch == 'true' }}
         run: |
           uv run python -m gold_research.update_quotes
           uv run python -m gold_research.build_site
+
+      - name: Check site data
+        run: uv run python -m gold_research.health_check
 
       # 建置完的靜態網頁另外推到公開的 yanting20050326-debug/gold-research-site
       # (https://yanting20050326-debug.github.io/gold-research-site/)，維持跟
       # 拆分前一致的公開網址，不用搬家。需要一組有該 repo 寫入權限的 PAT，
       # 存在這個 repo 的 Settings > Secrets > Actions，命名為
       # GOLD_RESEARCH_SITE_PAT——這組 token 只有人類能在
-      # github.com/settings/tokens 建立，還沒設定前這個步驟會被跳過。
+      # github.com/settings/tokens 建立；未設定時前面的檢查會明確報錯。
       - name: Publish to public gold-research-site repo
         if: ${{ env.HAS_SITE_PAT == 'true' }}
         env:
