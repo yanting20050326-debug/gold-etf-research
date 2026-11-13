@@ -4,16 +4,27 @@
 // 延遲數小時，而且每次都要重新建站。報價只是一個小 JSON，直接由 Worker
 // 即時提供，更新頻率就只取決於網頁的輪詢間隔，跟 GitHub 排程完全脫鉤。
 //
-// 不需要任何 secret：兩個資料來源都是公開端點。
+// 報價端點（fetch）不需要任何 secret：兩個資料來源都是公開端點。
+//
+// 另外每分鐘有一個排程（scheduled）：用即時價判斷是否到了加碼點，到了就發
+// LINE 廣播（見 notify.js）。這部分需要兩樣東西，都不會寫進程式碼或 repo：
+//   - secret LINE_CHANNEL_ACCESS_TOKEN（wrangler secret put）
+//   - KV namespace 綁定 NOTIFY_STATE（存「上次通知到哪個階段」）
+// 沒有設定 token 時排程會直接略過，不影響報價端點。
 
 import {
   TWSE_CODES,
   buildPayload,
+  formatTaipeiDate,
   isTwseSession,
   parseTwsePayload,
   parseYahooChart,
 } from "./quotes.js";
+import { runNotifyCheck } from "./notify.js";
 
+const SITE_DATA_URL =
+  "https://yanting20050326-debug.github.io/gold-research-site/data/gold_site.json";
+const LINE_BROADCAST_URL = "https://api.line.me/v2/bot/message/broadcast";
 const CACHE_SECONDS = 10;
 const UPSTREAM_TIMEOUT_MS = 8000;
 const TWSE_URL = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp";
@@ -56,7 +67,62 @@ export async function loadPayload(now = new Date()) {
   );
 }
 
+// 最近一次建站結果（回檔高點、MA20、起漲前低等）。公開檔案，邊緣快取 5 分鐘。
+async function fetchSiteData() {
+  const response = await fetch(SITE_DATA_URL, {
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    cf: { cacheTtl: 300, cacheEverything: true },
+  });
+  if (!response.ok) throw new Error(`site data HTTP ${response.status}`);
+  return response.json();
+}
+
+function makeLineSender(token) {
+  return async (text) => {
+    try {
+      const response = await fetch(LINE_BROADCAST_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ messages: [{ type: "text", text }] }),
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      });
+      if (!response.ok) console.error("LINE broadcast failed:", response.status);
+      return response.ok;
+    } catch (error) {
+      console.error("LINE broadcast error:", String(error));
+      return false;
+    }
+  };
+}
+
+export async function handleScheduled(event, env) {
+  if (!env.LINE_CHANNEL_ACCESS_TOKEN || !env.NOTIFY_STATE) {
+    console.warn("LINE token or NOTIFY_STATE KV not configured; skipping notify check");
+    return;
+  }
+  const now = new Date(event.scheduledTime);
+  // 台股盤中每分鐘檢查；其餘時間（只有國際金價在動）每 5 分鐘檢查一次就夠。
+  if (!isTwseSession(now) && now.getUTCMinutes() % 5 !== 0) return;
+
+  const [payload, site] = await Promise.all([loadPayload(now), fetchSiteData()]);
+  const summary = await runNotifyCheck({
+    today: formatTaipeiDate(now),
+    quotes: payload.quotes,
+    site,
+    kv: env.NOTIFY_STATE,
+    sendLine: makeLineSender(env.LINE_CHANNEL_ACCESS_TOKEN),
+  });
+  if (summary.sent || summary.failed) console.log("notify check:", JSON.stringify(summary));
+}
+
 export default {
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(handleScheduled(event, env));
+  },
+
   async fetch(request, env, ctx) {
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: CORS_HEADERS });

@@ -33,6 +33,12 @@ export function isTwseSession(date) {
   return minutes >= 8 * 60 + 30 && minutes <= 14 * 60 + 30;
 }
 
+// 台北日曆日（YYYY-MM-DD），通知去重用「同一天」判斷。
+export function formatTaipeiDate(date) {
+  const p = taipeiParts(date);
+  return `${p.year}-${pad(p.month)}-${pad(p.day)}`;
+}
+
 export function formatTaipeiMinute(epochSeconds) {
   const p = taipeiParts(new Date(epochSeconds * 1000));
   return `${p.year}-${pad(p.month)}-${pad(p.day)} ${pad(p.hour)}:${pad(p.minute)}`;

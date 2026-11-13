@@ -53,7 +53,8 @@ jobs:
       - name: Build site
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          LINE_CHANNEL_ACCESS_TOKEN: ${{ github.event_name != 'push' && secrets.LINE_CHANNEL_ACCESS_TOKEN || '' }}
+          # LINE 通知改由 Cloudflare Worker（quote-worker/）用即時價發送；這裡刻意不再
+          # 傳 LINE_CHANNEL_ACCESS_TOKEN，避免同一個加碼點被建站流程重複通知一次。
           FORCE_TWSE_FETCH: ${{ github.event_name == 'push' || github.event.inputs.force_fetch == 'true' || github.event.schedule == '17 7,8 * * 1-5' }}
         run: |
           uv run python -m gold_research.update_quotes

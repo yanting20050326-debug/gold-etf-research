@@ -1,6 +1,16 @@
 {
   "name": "gold-quote-worker",
   "main": "src/index.js",
-  "compatibility_date": "2026-11-01"
-  // 不需要 cron、也不需要任何 secret：只在收到請求時抓公開報價並快取 10 秒。
+  "compatibility_date": "2026-11-01",
+  // 報價端點（fetch）不需要 secret：收到請求時抓公開報價並快取 10 秒。
+  // LINE 盤中通知（scheduled）需要 secret LINE_CHANNEL_ACCESS_TOKEN，
+  // 用 `wrangler secret put LINE_CHANNEL_ACCESS_TOKEN` 設定，不要寫進這個檔案。
+  "kv_namespaces": [
+    // 存每個標的「上次通知到哪個階段」。id 只是資源編號，不是機密。
+    { "binding": "NOTIFY_STATE", "id": "e038ea9c607545078a306b83c7ba6ce8" }
+  ],
+  "triggers": {
+    // 每分鐘一次；程式內會依時段略過不需要的檢查（盤後只在 5 的倍數分鐘執行）。
+    "crons": ["* * * * *"]
+  }
 }
