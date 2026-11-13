@@ -89,6 +89,7 @@ def test_build_payload_has_expected_schema():
     assert payload["disclaimer"]
     assert payload["auto_refresh_seconds"] == 60
     assert payload["live_refresh_seconds"] == 15
+    assert payload["live_quotes_url"].startswith("https://")
     target = payload["targets"]["00635U"]
     assert target["asset_class"] == "commodity_futures_etf"
     assert target["indicators"]["ma20"] is not None
@@ -346,6 +347,9 @@ def test_render_html_includes_position_gauge_and_auto_refresh():
     assert "refreshLiveQuotes" in html
     assert "SITE_DATA.live_refresh_seconds" in html
     assert "data/live_quotes.json" in html
+    # 優先用 Worker、失敗才退回靜態 JSON。
+    assert "SITE_DATA.live_quotes_url" in html
+    assert "fetchLiveQuotes" in html
     assert 'id="page-updated-time"' in html
     assert "markPageUpdatedNow()" in html
 

@@ -1,0 +1,6 @@
+{
+  "name": "gold-quote-worker",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-01"
+  // 不需要 cron、也不需要任何 secret：只在收到請求時抓公開報價並快取 10 秒。
+}

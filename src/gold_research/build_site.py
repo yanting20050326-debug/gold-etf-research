@@ -105,6 +105,9 @@ STATIC_DIR = PROJECT_ROOT / "static"
 # 下一次執行；LINE 通知需要記得「上次通知過的階段」才能只在真的變化時發送，
 # 所以直接讀回已公開的 notify_state.json 當作狀態來源，寫入時一併放進
 # site/ 目錄，讓它跟著這次建置結果一起發布到公開 repo，下次執行再讀回來。
+# 即時報價 Worker（quote-worker/）：收到請求才抓 TWSE／Yahoo，快取 10 秒，
+# 網頁輪詢它取得報價。網址是 *.workers.dev 的公開唯讀端點，不含任何機密。
+LIVE_QUOTES_URL = "https://gold-quote-worker.abilabnpust.workers.dev/"
 PUBLISHED_NOTIFY_STATE_URL = (
     "https://yanting20050326-debug.github.io/gold-research-site/notify_state.json"
 )
@@ -376,6 +379,7 @@ def build_payload(
         "disclaimer": DISCLAIMER,
         "auto_refresh_seconds": 60,
         "live_refresh_seconds": 15,
+        "live_quotes_url": LIVE_QUOTES_URL,
         "targets": targets,
         "macro_context": {
             "data_source": {"name": "Yahoo Finance", "as_of": macro_fx.as_of},
@@ -836,9 +840,24 @@ function refreshSiteData() {
     .catch(() => {});
 }
 
-function refreshLiveQuotes() {
-  fetch("data/live_quotes.json?ts=" + Date.now())
+// 報價優先向 Cloudflare Worker 即時取得（不受 GitHub Actions 排程延遲影響）；
+// Worker 連不上、或兩個資料來源都沒資料時，退回建站時一併發布的靜態 JSON。
+function fetchLiveQuotes() {
+  const fetchStatic = () =>
+    fetch("data/live_quotes.json?ts=" + Date.now()).then((res) =>
+      res.ok ? res.json() : null
+    );
+  if (!SITE_DATA.live_quotes_url) return fetchStatic();
+  return fetch(SITE_DATA.live_quotes_url + "?ts=" + Date.now())
     .then((res) => (res.ok ? res.json() : null))
+    .then((fresh) =>
+      fresh && fresh.quotes && Object.keys(fresh.quotes).length ? fresh : fetchStatic()
+    )
+    .catch(fetchStatic);
+}
+
+function refreshLiveQuotes() {
+  fetchLiveQuotes()
     .then((fresh) => {
       if (!fresh) return;
       SITE_DATA.live_quotes_generated_at = fresh.generated_at;
