@@ -1503,10 +1503,10 @@ function setAssistantBusy(busy) {
 async function sendAssistantMessage(rawText) {
   const text = rawText.trim();
   if (!text || ASSISTANT.busy) return;
-  setAssistantChipsOpen(false); // 開始對話就把建議問題收起來，讓回答有空間
+  setAssistantChipsOpen(false); // 等回答時先收起建議問題，回答完再跳回來
   const userMessage = { role: "user", content: text };
   ASSISTANT.messages.push(userMessage);
-  addAssistantBubble("user", text);
+  const questionBubble = addAssistantBubble("user", text);
   ASSISTANT.input.value = "";
   setAssistantBusy(true);
   const typing = addAssistantBubble("assistant", "思考中…", "typing");
@@ -1536,7 +1536,17 @@ async function sendAssistantMessage(rawText) {
     addAssistantBubble("assistant", "網路連不上，請稍後再試。", "error");
   } finally {
     setAssistantBusy(false);
+    // 回答完把建議問題放回來；對話區因此變矮，捲到「這次的問題＋回答開頭」，
+    // 長回答（例如分批計畫）才能從第一行讀起，而不是停在最後一行。
+    setAssistantChipsOpen(true);
+    scrollAssistantTo(questionBubble);
   }
+}
+
+function scrollAssistantTo(bubble) {
+  const log = ASSISTANT.log;
+  if (!log || !bubble) return;
+  log.scrollTop += bubble.getBoundingClientRect().top - log.getBoundingClientRect().top - 8;
 }
 
 function assistantSuggestions() {
