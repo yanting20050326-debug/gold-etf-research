@@ -961,7 +961,7 @@ const ASSISTANT = { busy: false, messages: [], log: null, input: null, send: nul
 const ASSISTANT_LIMITS = { messages: 8, total: 5000, assistantChars: 1500 };
 
 function assistantErrorText(status, code) {
-  if (status === 503 || code === "not_configured") return "小幫手目前沒有啟用，其他功能不受影響。";
+  if (status === 503 || code === "not_configured") return "小幫手還沒啟用，其他功能不受影響。";
   if (code === "rate_limited") return "問得有點快，請過幾分鐘再試。";
   if (code === "daily_limit") return "今天的提問次數已達上限，明天再來問吧。";
   if (code === "message_too_long" || code === "too_many_messages") return "這段對話太長了，請重新整理頁面再開始。";
