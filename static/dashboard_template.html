@@ -1023,7 +1023,7 @@ function renderTarget(code) {
 
 // ---- 我的黃金購買計畫 -------------------------------------------------------
 //
-// 「金羅盤並不以注意風險為藉口」：不是只提醒有風險，而是陪使用者寫下一份可變動的購買計畫：
+// 「看懂再出手，計畫陪你走」：不是只提醒有風險，而是陪使用者寫下一份可變動的購買計畫：
 // 購買目的、投入邊界、行動條件、下跌情境、檢視時間。表單只建一次（不跟著每 15 秒重畫），
 // 跟價格有關的數字（觸發價、下跌時的價位）由 updatePlanOutputs() 跟著即時價更新。
 // 內容只存在這台裝置的瀏覽器（localStorage），不會上傳；存不了（無痕模式等）也照常可用。
@@ -1193,7 +1193,7 @@ function renderPlan() {
   host.innerHTML = "";
 
   const banner = el("div", { className: "plan-banner" });
-  banner.appendChild(el("h2", { id: "plan-title", textContent: "金羅盤並不以注意風險為藉口" }));
+  banner.appendChild(el("h2", { id: "plan-title", textContent: "看懂再出手，計畫陪你走" }));
   banner.appendChild(el("p", { textContent: "為你完成一份可變動的「黃金購買計畫」：先想清楚為什麼買、買多少、什麼時候重新評估，而不是看到漲跌就立刻交易。" }));
   host.appendChild(banner);
 
