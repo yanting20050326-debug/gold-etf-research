@@ -212,6 +212,10 @@
   .assistant-chips { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 12px 0; background: #fff; max-height: 112px; overflow-y: auto; }
   .assistant-chips button { font: inherit; font-size: 13.5px; background: var(--cream-2); color: var(--brand-dark); border: 1px solid var(--brand-soft); border-radius: 999px; padding: 4px 10px; cursor: pointer; text-align: left; }
   .assistant-chips button:hover { background: var(--brand-soft); }
+  .assistant-chips.collapsed { display: none; }
+  .assistant-chips-toggle { align-self: flex-start; font: inherit; font-size: 12.5px; color: var(--text-soft); background: #fff; border: 0; padding: 6px 12px 0; cursor: pointer; }
+  .assistant-chips-toggle:hover { color: var(--brand-dark); }
+  .assistant-chips-toggle:focus-visible { outline: 3px solid var(--yellow); outline-offset: 1px; }
   .assistant-form { display: flex; gap: 8px; padding: 8px 12px; background: #fff; }
   .assistant-form input { flex: 1; min-width: 0; font: inherit; font-size: 15px; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; }
   .assistant-form button { font: inherit; font-weight: 700; font-size: 14px; color: #fff; background: var(--brand); border: 0; border-radius: 999px; padding: 8px 16px; cursor: pointer; }
@@ -1499,6 +1503,7 @@ function setAssistantBusy(busy) {
 async function sendAssistantMessage(rawText) {
   const text = rawText.trim();
   if (!text || ASSISTANT.busy) return;
+  setAssistantChipsOpen(false); // 開始對話就把建議問題收起來，讓回答有空間
   const userMessage = { role: "user", content: text };
   ASSISTANT.messages.push(userMessage);
   addAssistantBubble("user", text);
@@ -1559,6 +1564,13 @@ function updateAssistantChips() {
   });
 }
 
+function setAssistantChipsOpen(open) {
+  if (!ASSISTANT.chips || !ASSISTANT.chipsToggle) return;
+  ASSISTANT.chips.classList.toggle("collapsed", !open);
+  ASSISTANT.chipsToggle.textContent = open ? "收起建議問題 ▴" : "建議問題 ▾";
+  ASSISTANT.chipsToggle.setAttribute("aria-expanded", open ? "true" : "false");
+}
+
 function setAssistantOpen(open) {
   ASSISTANT.panel.classList.toggle("open", open);
   ASSISTANT.fab.setAttribute("aria-expanded", open ? "true" : "false");
@@ -1586,8 +1598,12 @@ function initAssistant() {
   log.setAttribute("aria-live", "polite");
   panel.appendChild(log);
 
-  const chips = el("div", { className: "assistant-chips" });
+  const chipsToggle = el("button", { type: "button", className: "assistant-chips-toggle" });
+  chipsToggle.setAttribute("aria-controls", "assistant-chips");
+  panel.appendChild(chipsToggle);
+  const chips = el("div", { className: "assistant-chips", id: "assistant-chips" });
   panel.appendChild(chips);
+  chipsToggle.addEventListener("click", () => setAssistantChipsOpen(chips.classList.contains("collapsed")));
 
   const form = el("form", { className: "assistant-form" });
   const input = el("input", { type: "text", maxLength: 500, placeholder: "輸入問題，例如：RSI 是什麼？" });
@@ -1600,7 +1616,8 @@ function initAssistant() {
     el("p", { className: "assistant-note", textContent: "金福企根據本站最新數據回答，會用程式計算數字；不給買賣指令，也不知道新聞。僅供研究參考。" })
   );
 
-  Object.assign(ASSISTANT, { log: log, input: input, send: send, chips: chips, panel: panel, fab: fab });
+  Object.assign(ASSISTANT, { log: log, input: input, send: send, chips: chips, chipsToggle: chipsToggle, panel: panel, fab: fab });
+  setAssistantChipsOpen(true); // 一開始展開，讓新手知道可以問什麼
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     sendAssistantMessage(input.value);
