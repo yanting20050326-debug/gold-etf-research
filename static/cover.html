@@ -79,6 +79,16 @@
   .enter-button:active { transform: translateY(0); }
   a:focus-visible { outline: 3px solid var(--yellow); outline-offset: 3px; }
 
+  /* 「金羅盤並不以注意風險為藉口」：購買計畫的五個步驟，按鈕連到儀表板的計畫區 */
+  .promise { width: min(100%, 640px); background: #f8f2df; border: 1px solid #ecdcae; border-radius: 14px; overflow: hidden; text-align: left; }
+  .promise-head { background: #f6e3a6; padding: 12px 16px; }
+  .promise-head h2 { margin: 0; font-size: clamp(18px, 3.4vw, 22px); font-weight: 800; letter-spacing: 0.04em; color: #2b2118; }
+  .promise-head p { margin: 2px 0 0; font-size: 13.5px; color: #5a4632; }
+  .promise-steps { list-style: none; margin: 0; padding: 10px 16px 4px; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 6px 14px; }
+  .promise-steps li { font-size: 13px; line-height: 1.5; color: var(--text); }
+  .promise-steps b { color: var(--brand-dark); }
+  .promise-cta { display: flex; justify-content: flex-start; padding: 6px 16px 14px; }
+
   .paths { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; width: min(100%, 640px); }
   .path { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px 14px; text-align: left; display: flex; flex-direction: column; gap: 6px; }
   .path-title { margin: 0; font-size: 15px; font-weight: 700; }
@@ -166,6 +176,21 @@
     </div>
 
     <a class="enter-button" href="dashboard.html">進入儀表板 <span aria-hidden="true">→</span></a>
+
+    <section class="promise" aria-labelledby="promise-title">
+      <div class="promise-head">
+        <h2 id="promise-title">金羅盤並不以注意風險為藉口</h2>
+        <p>為你完成一份可變動的「黃金購買計畫」</p>
+      </div>
+      <ul class="promise-steps">
+        <li><b>購買目的</b>：為什麼買、預計持有多久。</li>
+        <li><b>投入邊界</b>：總預算、定期投入與額外加碼預算。</li>
+        <li><b>行動條件</b>：什麼情況重新評估，而不是看到漲跌就交易。</li>
+        <li><b>下跌情境</b>：價格變動時可能損失多少、是否影響資金用途。</li>
+        <li><b>檢視時間</b>：何時回顧，哪些情況改變時要重設計畫。</li>
+      </ul>
+      <div class="promise-cta"><a class="path-button" href="dashboard.html#plan">建立我的購買計畫 <span aria-hidden="true">→</span></a></div>
+    </section>
 
     <section class="paths" aria-label="開始投資黃金">
       <div class="path">

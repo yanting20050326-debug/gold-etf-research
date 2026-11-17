@@ -126,7 +126,7 @@ STATIC_DIR = PROJECT_ROOT / "static"
 # 即時報價 Worker（quote-worker/）：收到請求才抓 TWSE／Yahoo，快取 10 秒，
 # 網頁輪詢它取得報價。網址是 *.workers.dev 的公開唯讀端點，不含任何機密。
 LIVE_QUOTES_URL = "https://gold-quote-worker.abilabnpust.workers.dev/"
-# AI 小幫手：同一個 Worker 的 /chat（需要 Worker 端設定 GEMINI_API_KEY 才會啟用）。
+# AI 小幫手「金福企」：同一個 Worker 的 /chat（Cloudflare Workers AI，不需要金鑰）。
 ASSISTANT_URL = LIVE_QUOTES_URL + "chat"
 PUBLISHED_NOTIFY_STATE_URL = (
     "https://yanting20050326-debug.github.io/gold-research-site/notify_state.json"

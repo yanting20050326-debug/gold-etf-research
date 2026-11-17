@@ -653,7 +653,7 @@ def test_render_html_includes_the_assistant_chat_widget():
     assert "x-goog-api-key" not in html
     assert "key=" not in html
     # 沒啟用、被限流時要有明確的說明，不能默默失敗。
-    assert "小幫手還沒啟用" in html
+    assert "金福企還沒啟用" in html
     assert "今天的提問次數已達上限" in html
     # 失敗的那一輪不能被帶進下一次對話的上下文。
     assert "userMessage.skip = true" in html

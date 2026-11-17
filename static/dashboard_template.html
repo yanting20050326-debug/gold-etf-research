@@ -35,7 +35,13 @@
   .topbar-inner { max-width: 1240px; margin: 0 auto; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
   .topbar h1 { display: inline; font-size: 22px; font-weight: 700; }
   .brand-sub { font-size: 12px; letter-spacing: 0.25em; opacity: 0.85; margin-left: 10px; }
-  .back { color: #fff; text-decoration: none; font-size: 13px; opacity: 0.9; margin-right: 12px; }
+  .brand-line { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .home { color: #fff; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 999px; opacity: 0.92; }
+  .home:hover { background: rgba(255, 255, 255, 0.16); opacity: 1; }
+  .home:focus-visible, .plan-link:focus-visible { outline: 3px solid var(--yellow); outline-offset: 2px; }
+  .topbar-right { display: flex; align-items: center; gap: 14px; }
+  .plan-link { color: var(--brand-dark); background: var(--yellow); text-decoration: none; font-size: 13px; font-weight: 700; padding: 5px 12px; border-radius: 999px; white-space: nowrap; }
+  .plan-link:hover { background: #fff; }
   .status { font-size: 13px; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
   .live-dot { display: inline-block; width: 9px; height: 9px; border-radius: 999px; background: #22a447; margin-right: 6px; vertical-align: middle; }
   .status .live-dot { background: var(--yellow); margin-right: 0; }
@@ -133,7 +139,61 @@
   .rule-list { margin: 8px 0 0; padding-left: 20px; font-size: 13.5px; line-height: 1.7; }
   .footer-note { margin-top: 14px; font-size: 12.5px; color: var(--text-soft); }
 
-  /* AI 小幫手 */
+  /* 我的黃金購買計畫 */
+  .plan { margin-top: 22px; scroll-margin-top: 12px; }
+  .plan-banner { background: #f6e3a6; border-radius: 12px 12px 0 0; padding: 16px 20px; }
+  .plan-banner h2 { font-size: 24px; font-weight: 800; letter-spacing: 0.04em; color: #2b2118; }
+  .plan-banner p { margin-top: 4px; font-size: 14.5px; color: #5a4632; }
+  .plan-body { background: #f8f2df; border: 1px solid #ecdcae; border-top: 0; border-radius: 0 0 12px 12px; padding: 16px; }
+  .plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(330px, 100%), 1fr)); gap: 14px; }
+  .plan-step { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .plan-step h3 { font-size: 16px; display: flex; align-items: center; gap: 8px; margin: 0; }
+  .plan-step h3 .no { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 999px; background: var(--brand); color: #fff; font-size: 13px; }
+  .plan-step .lead { font-size: 13px; color: var(--text-soft); margin-top: -4px; }
+  .plan-field { display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; font-weight: 700; }
+  .plan-field small { font-weight: 400; color: var(--text-soft); font-size: 12px; }
+  .plan-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+  .plan input[type="number"], .plan input[type="date"], .plan input[type="text"], .plan select { font: inherit; font-size: 14px; font-weight: 400; border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; background: #fff; color: var(--text); width: 100%; min-width: 0; }
+  .plan input:focus-visible, .plan select:focus-visible, .plan button:focus-visible { outline: 3px solid var(--yellow); outline-offset: 1px; }
+  .plan-checks { display: flex; flex-direction: column; gap: 6px; }
+  .plan-check { display: flex; align-items: flex-start; gap: 8px; font-size: 13.5px; line-height: 1.5; font-weight: 400; }
+  .plan-check input { margin-top: 4px; accent-color: var(--brand); flex: 0 0 auto; }
+  .plan-out { background: var(--cream-2); border-radius: 8px; padding: 8px 12px; font-size: 13.5px; line-height: 1.6; }
+  .plan-out b { color: var(--brand-dark); }
+  .plan-warn { background: var(--brand-soft); color: var(--brand-dark); border-radius: 8px; padding: 8px 12px; font-size: 13px; line-height: 1.55; }
+  .plan-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .plan-table th, .plan-table td { padding: 6px 8px; border-bottom: 1px solid var(--brand-soft); text-align: right; white-space: nowrap; }
+  .plan-table th:first-child, .plan-table td:first-child { text-align: left; white-space: normal; }
+  .plan-table th { font-size: 12px; color: var(--text-soft); font-weight: 400; }
+  .plan-table tr.over td { color: var(--brand-dark); font-weight: 700; background: #fff1ea; }
+  .plan-summary { margin-top: 14px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .plan-summary h3 { font-size: 16px; margin: 0 0 8px; }
+  .plan-summary pre { margin: 0; white-space: pre-wrap; word-break: break-word; font: inherit; font-size: 14px; line-height: 1.75; }
+  .plan-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; align-items: center; }
+  .plan-actions button { font: inherit; font-size: 14px; font-weight: 700; border-radius: 999px; padding: 7px 16px; cursor: pointer; border: 1px solid var(--brand); background: #fff; color: var(--brand-dark); }
+  .plan-actions button.primary { background: var(--brand); color: #fff; }
+  .plan-actions .note { margin-left: auto; }
+  @media (max-width: 620px) {
+    .plan-banner { padding: 14px; }
+    .plan-banner h2 { font-size: 19px; }
+    .plan-body { padding: 10px; }
+    .plan-grid { grid-template-columns: minmax(0, 1fr); }
+    .plan-step { padding: 12px; }
+    .plan-table th, .plan-table td { padding: 6px 4px; font-size: 13px; }
+    .plan-actions .note { margin-left: 0; }
+    .plan-link { padding: 4px 10px; }
+    .topbar-right { gap: 8px; }
+    .topbar-right .status { font-size: 12px; }
+  }
+  @media print {
+    body { background: #fff; }
+    body * { visibility: hidden; }
+    #plan-summary, #plan-summary * { visibility: visible; }
+    #plan-summary { position: absolute; left: 0; top: 0; width: 100%; border: 0; }
+    #plan-summary .plan-actions { display: none; }
+  }
+
+  /* AI 小幫手（金福企） */
   .shell { padding-bottom: 84px; }
   .assistant-fab { position: fixed; right: 16px; bottom: 16px; z-index: 60; border: 0; cursor: pointer; font: inherit; font-weight: 700; font-size: 15px; color: #fff; background: var(--brand); padding: 12px 20px; border-radius: 999px; box-shadow: 0 8px 22px rgba(218, 55, 0, 0.35); }
   .assistant-fab:hover { background: var(--brand-dark); }
@@ -184,14 +244,22 @@
 <body>
   <header class="topbar">
     <div class="topbar-inner">
-      <div><a class="back" href="index.html">← 封面</a><h1>金羅盤</h1><span class="brand-sub">GOLD COMPASS</span></div>
-      <div class="status"><span class="live-dot"></span><span id="page-updated-line">更新 <span id="page-updated-time">--:--:--</span></span></div>
+      <div class="brand-line">
+        <a class="home" href="index.html" aria-label="回首頁" title="回首頁"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.5 10v9.5h5v-5h3v5h5V10" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></a>
+        <div><h1>金羅盤</h1><span class="brand-sub">GOLD COMPASS</span></div>
+      </div>
+      <div class="topbar-right">
+        <a class="plan-link" href="#plan">我的購買計畫</a>
+        <div class="status"><span class="live-dot"></span><span id="page-updated-line">更新 <span id="page-updated-time">--:--:--</span></span></div>
+      </div>
     </div>
   </header>
   <div class="disclaimer" id="disclaimer"></div>
   <main class="shell">
     <nav class="target-cards" id="target-tabs" aria-label="選擇標的"></nav>
     <section id="target-view"></section>
+    <!-- 購買計畫放在 target-view 外面：標的區每 15 秒會整個重畫，放裡面的話輸入到一半會被清掉。 -->
+    <section id="plan" class="plan" aria-labelledby="plan-title"></section>
   </main>
 <script>
 const SITE_DATA = __DATA__;
@@ -950,9 +1018,439 @@ function renderTarget(code) {
   view.appendChild(renderFolds(target));
   updateTabActiveState();
   updateAssistantChips();
+  updatePlanOutputs();
 }
 
-// ---- AI 小幫手（聊天視窗）---------------------------------------------------
+// ---- 我的黃金購買計畫 -------------------------------------------------------
+//
+// 「金羅盤並不以注意風險為藉口」：不是只提醒有風險，而是陪使用者寫下一份可變動的購買計畫：
+// 購買目的、投入邊界、行動條件、下跌情境、檢視時間。表單只建一次（不跟著每 15 秒重畫），
+// 跟價格有關的數字（觸發價、下跌時的價位）由 updatePlanOutputs() 跟著即時價更新。
+// 內容只存在這台裝置的瀏覽器（localStorage），不會上傳；存不了（無痕模式等）也照常可用。
+
+const PLAN_KEY = "goldCompass.plan.v1";
+const PLAN_CODES = ["TBBGOLD", "00635U", "00708L"];
+const PLAN_PURPOSES = [
+  ["preserve", "長期保值、分散資產"],
+  ["goal", "為特定目標存錢（退休、教育等）"],
+  ["swing", "想參與金價的漲跌"],
+  ["other", "其他（寫在備註）"],
+];
+const PLAN_HORIZONS = [["lt1", "1 年內"], ["1to3", "1～3 年"], ["3to5", "3～5 年"], ["gt5", "5 年以上"]];
+const PLAN_NEED_MONEY = [["no", "不會用到"], ["maybe", "可能會用到"], ["yes", "一定會用到"]];
+const PLAN_REVIEW_EVERY = [["month", "每個月", 1], ["quarter", "每季", 3], ["half", "每半年", 6]];
+const PLAN_TRIGGERS = [
+  ["income", "收入或工作有變動"],
+  ["spending", "接下來有大筆支出（買房、學費、醫療）"],
+  ["goal", "購買目的或持有期間改變"],
+  ["loss", "虧損超過我能接受的上限"],
+  ["family", "家庭狀況改變（結婚、生子、照顧家人）"],
+];
+const PLAN_DROPS = [5, 10, 20, 30];
+
+let PLAN = null;
+const PLAN_UI = {};
+
+function planDefaults() {
+  const code = PLAN_CODES.indexOf(currentTargetCode) >= 0 ? currentTargetCode : "TBBGOLD";
+  return {
+    code: code,
+    purpose: "preserve",
+    purposeNote: "",
+    horizon: "3to5",
+    budget: "",
+    monthly: "",
+    extra: "",
+    conditions: { pullback: true, priorLow: true, keepMonthly: true, lossLimit: true },
+    customCondition: "",
+    maxLossPct: "15",
+    needMoney: "no",
+    reviewEvery: "quarter",
+    nextReview: addMonthsIso(new Date(), 3),
+    triggers: { income: true, spending: true, goal: true, loss: true, family: false },
+    updatedAt: null,
+  };
+}
+
+function loadPlan() {
+  const base = planDefaults();
+  try {
+    const saved = JSON.parse(localStorage.getItem(PLAN_KEY) || "null");
+    if (saved && typeof saved === "object") {
+      return Object.assign(base, saved, {
+        conditions: Object.assign(base.conditions, saved.conditions || {}),
+        triggers: Object.assign(base.triggers, saved.triggers || {}),
+        code: PLAN_CODES.indexOf(saved.code) >= 0 ? saved.code : base.code,
+      });
+    }
+  } catch (error) {
+    /* 讀不到就用預設值 */
+  }
+  return base;
+}
+
+function savePlan() {
+  PLAN.updatedAt = new Date().toISOString();
+  try {
+    localStorage.setItem(PLAN_KEY, JSON.stringify(PLAN));
+  } catch (error) {
+    /* 無痕模式等存不了：計畫照常可用，只是重新整理後不會保留 */
+  }
+}
+
+function addMonthsIso(date, months) {
+  const d = new Date(date.getFullYear(), date.getMonth() + months, date.getDate());
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
+function planNum(value) {
+  const n = parseFloat(String(value === undefined || value === null ? "" : value).replace(/,/g, ""));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function money(n) {
+  return Math.round(n).toLocaleString("en-US") + " 元";
+}
+
+function optionLabel(list, value) {
+  const hit = list.find((item) => item[0] === value);
+  return hit ? hit[1] : "";
+}
+
+function planTarget() {
+  return SITE_DATA.targets[PLAN.code] || null;
+}
+
+// 這個標的的單位價格說明，例如「元／公克」；ETF 是「元」。
+function planUnit(target) {
+  return target && target.code === "TBBGOLD" ? " 元／公克" : " 元";
+}
+
+function planChanged(key, value) {
+  PLAN[key] = value;
+  savePlan();
+  updatePlanOutputs();
+}
+
+function planSelect(list, key) {
+  const select = el("select", {});
+  list.forEach((item) => select.appendChild(el("option", { value: item[0], textContent: item[1] })));
+  select.value = PLAN[key];
+  select.addEventListener("change", () => planChanged(key, select.value));
+  return select;
+}
+
+function planNumber(key, placeholder, step) {
+  const input = el("input", { type: "number", min: "0", step: step || "1000", inputMode: "numeric", placeholder: placeholder || "" });
+  input.value = PLAN[key];
+  input.addEventListener("input", () => planChanged(key, input.value));
+  return input;
+}
+
+function planText(key, placeholder) {
+  const input = el("input", { type: "text", maxLength: 120, placeholder: placeholder || "" });
+  input.value = PLAN[key];
+  input.addEventListener("input", () => planChanged(key, input.value));
+  return input;
+}
+
+function planField(label, control, hint) {
+  const wrap = el("label", { className: "plan-field" });
+  wrap.appendChild(document.createTextNode(label));
+  if (hint) wrap.appendChild(el("small", { textContent: hint }));
+  wrap.appendChild(control);
+  return wrap;
+}
+
+function planCheck(group, key, labelNode) {
+  const wrap = el("label", { className: "plan-check" });
+  const box = el("input", { type: "checkbox" });
+  box.checked = !!PLAN[group][key];
+  box.addEventListener("change", () => {
+    PLAN[group][key] = box.checked;
+    savePlan();
+    updatePlanOutputs();
+  });
+  wrap.appendChild(box);
+  wrap.appendChild(labelNode);
+  return wrap;
+}
+
+function planStep(no, title, lead) {
+  const step = el("div", { className: "plan-step" });
+  const h = el("h3", {});
+  h.appendChild(el("span", { className: "no", textContent: String(no) }));
+  h.appendChild(document.createTextNode(title));
+  step.appendChild(h);
+  step.appendChild(el("p", { className: "lead", textContent: lead }));
+  return step;
+}
+
+function renderPlan() {
+  const host = document.getElementById("plan");
+  if (!host) return;
+  PLAN = loadPlan();
+  host.innerHTML = "";
+
+  const banner = el("div", { className: "plan-banner" });
+  banner.appendChild(el("h2", { id: "plan-title", textContent: "金羅盤並不以注意風險為藉口" }));
+  banner.appendChild(el("p", { textContent: "為你完成一份可變動的「黃金購買計畫」：先想清楚為什麼買、買多少、什麼時候重新評估，而不是看到漲跌就立刻交易。" }));
+  host.appendChild(banner);
+
+  const body = el("div", { className: "plan-body" });
+  const grid = el("div", { className: "plan-grid" });
+
+  // 1. 購買目的
+  const s1 = planStep(1, "購買目的", "為什麼買、預計持有多久。");
+  const r1 = el("div", { className: "plan-row" });
+  r1.appendChild(planField("為什麼買", planSelect(PLAN_PURPOSES, "purpose")));
+  r1.appendChild(planField("預計持有多久", planSelect(PLAN_HORIZONS, "horizon")));
+  s1.appendChild(r1);
+  s1.appendChild(planField("備註", planText("purposeNote", "例如：五年後的教育基金"), "選填"));
+  PLAN_UI.purposeWarn = el("div", { className: "plan-warn" });
+  s1.appendChild(PLAN_UI.purposeWarn);
+  grid.appendChild(s1);
+
+  // 2. 投入邊界
+  const s2 = planStep(2, "投入邊界", "總預算、定期投入與額外加碼預算。");
+  const targetSelect = el("select", {});
+  PLAN_CODES.forEach((code) => {
+    const t = SITE_DATA.targets[code];
+    if (t) targetSelect.appendChild(el("option", { value: code, textContent: SHORT_NAMES[code] || t.display_name }));
+  });
+  targetSelect.value = PLAN.code;
+  targetSelect.addEventListener("change", () => planChanged("code", targetSelect.value));
+  s2.appendChild(planField("買哪一個", targetSelect, "國際金價無法在台灣直接買賣，所以只列存摺與 ETF。"));
+  const r2 = el("div", { className: "plan-row" });
+  r2.appendChild(planField("總預算", planNumber("budget", "例如 100000"), "這份計畫最多投入的錢"));
+  r2.appendChild(planField("每月定期投入", planNumber("monthly", "例如 3000", "500"), "沒有就留空"));
+  r2.appendChild(planField("額外加碼預算", planNumber("extra", "例如 20000"), "回檔時才動用"));
+  s2.appendChild(r2);
+  PLAN_UI.budgetOut = el("div", { className: "plan-out" });
+  s2.appendChild(PLAN_UI.budgetOut);
+  grid.appendChild(s2);
+
+  // 3. 行動條件
+  const s3 = planStep(3, "行動條件", "什麼情況才重新評估，而不是看到漲跌就立即交易。");
+  const checks = el("div", { className: "plan-checks" });
+  PLAN_UI.condPullback = el("span", {});
+  PLAN_UI.condPriorLow = el("span", {});
+  PLAN_UI.condKeepMonthly = el("span", { textContent: "定期投入照常執行，不因為單日漲跌而暫停或臨時加碼" });
+  PLAN_UI.condLossLimit = el("span", {});
+  checks.appendChild(planCheck("conditions", "pullback", PLAN_UI.condPullback));
+  checks.appendChild(planCheck("conditions", "priorLow", PLAN_UI.condPriorLow));
+  checks.appendChild(planCheck("conditions", "keepMonthly", PLAN_UI.condKeepMonthly));
+  checks.appendChild(planCheck("conditions", "lossLimit", PLAN_UI.condLossLimit));
+  s3.appendChild(checks);
+  s3.appendChild(planField("我自己的條件", planText("customCondition", "例如：金價創新高時不追買"), "選填"));
+  PLAN_UI.stageOut = el("div", { className: "plan-out" });
+  s3.appendChild(PLAN_UI.stageOut);
+  grid.appendChild(s3);
+
+  // 4. 下跌情境
+  const s4 = planStep(4, "下跌情境", "不同價格變動下，可能損失多少、是否影響資金用途。");
+  const r4 = el("div", { className: "plan-row" });
+  r4.appendChild(planField("最多能接受虧損（%）", planNumber("maxLossPct", "例如 15", "1")));
+  r4.appendChild(planField("持有期間會用到這筆錢嗎", planSelect(PLAN_NEED_MONEY, "needMoney")));
+  s4.appendChild(r4);
+  PLAN_UI.dropTable = el("table", { className: "plan-table" });
+  s4.appendChild(PLAN_UI.dropTable);
+  PLAN_UI.dropNote = el("p", { className: "note" });
+  s4.appendChild(PLAN_UI.dropNote);
+  PLAN_UI.moneyWarn = el("div", { className: "plan-warn" });
+  s4.appendChild(PLAN_UI.moneyWarn);
+  grid.appendChild(s4);
+
+  // 5. 檢視時間
+  const s5 = planStep(5, "檢視時間", "何時回顧，哪些個人情況改變時需要重設計畫。");
+  const r5 = el("div", { className: "plan-row" });
+  const every = el("select", {});
+  PLAN_REVIEW_EVERY.forEach((item) => every.appendChild(el("option", { value: item[0], textContent: item[1] })));
+  every.value = PLAN.reviewEvery;
+  const nextDate = el("input", { type: "date" });
+  nextDate.value = PLAN.nextReview;
+  every.addEventListener("change", () => {
+    const months = (PLAN_REVIEW_EVERY.find((item) => item[0] === every.value) || [0, 0, 3])[2];
+    PLAN.nextReview = addMonthsIso(new Date(), months);
+    nextDate.value = PLAN.nextReview;
+    planChanged("reviewEvery", every.value);
+  });
+  nextDate.addEventListener("input", () => planChanged("nextReview", nextDate.value));
+  r5.appendChild(planField("多久回顧一次", every));
+  r5.appendChild(planField("下次回顧日", nextDate));
+  s5.appendChild(r5);
+  s5.appendChild(el("p", { className: "plan-field", textContent: "遇到這些情況就重設計畫：" }));
+  const triggers = el("div", { className: "plan-checks" });
+  PLAN_TRIGGERS.forEach((item) => triggers.appendChild(planCheck("triggers", item[0], el("span", { textContent: item[1] }))));
+  s5.appendChild(triggers);
+  grid.appendChild(s5);
+
+  body.appendChild(grid);
+
+  // 計畫摘要：可複製、可列印成 PDF
+  const summary = el("div", { className: "plan-summary", id: "plan-summary" });
+  summary.appendChild(el("h3", { textContent: "我的黃金購買計畫" }));
+  PLAN_UI.summaryText = el("pre", {});
+  summary.appendChild(PLAN_UI.summaryText);
+  const actions = el("div", { className: "plan-actions" });
+  const copy = el("button", { type: "button", className: "primary", textContent: "複製計畫文字" });
+  copy.addEventListener("click", () => copyPlanText(copy));
+  const print = el("button", { type: "button", textContent: "列印／存成 PDF" });
+  print.addEventListener("click", () => window.print());
+  const reset = el("button", { type: "button", textContent: "清除重填" });
+  reset.addEventListener("click", () => {
+    if (!window.confirm("確定要清除這份計畫，重新填寫嗎？")) return;
+    try {
+      localStorage.removeItem(PLAN_KEY);
+    } catch (error) {
+      /* 忽略 */
+    }
+    renderPlan();
+  });
+  actions.appendChild(copy);
+  actions.appendChild(print);
+  actions.appendChild(reset);
+  actions.appendChild(el("span", { className: "note", textContent: "內容只存在這台裝置的瀏覽器，不會上傳。僅供個人規劃參考，不構成投資建議。" }));
+  summary.appendChild(actions);
+  body.appendChild(summary);
+
+  host.appendChild(body);
+  updatePlanOutputs();
+}
+
+function copyPlanText(button) {
+  const text = PLAN_UI.summaryText.textContent;
+  const done = () => {
+    button.textContent = "已複製";
+    setTimeout(() => (button.textContent = "複製計畫文字"), 1600);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done, () => window.prompt("請手動複製：", text));
+  } else {
+    window.prompt("請手動複製：", text);
+  }
+}
+
+// 依目前選的標的與最新價格，算出觸發價、下跌時的價位與損失，並重寫摘要。
+function updatePlanOutputs() {
+  if (!PLAN || !PLAN_UI.summaryText) return;
+  const target = planTarget();
+  if (!target) return;
+  const unit = planUnit(target);
+  const price = target.latest.close;
+  const ps = target.indicators.pullback_stage;
+  const scale = target.pullback_scale || 1;
+  const firstPct = 3 * scale;
+  const firstPrice = ps && ps.recent_high ? ps.recent_high * (1 - firstPct / 100) : null;
+  const priorLow = target.indicators.prior_low;
+  const priorBroken = !priorLow && target.indicators.prior_low_broken === true;
+  const budget = planNum(PLAN.budget);
+  const monthly = planNum(PLAN.monthly);
+  const extra = planNum(PLAN.extra);
+  const maxLoss = Math.min(planNum(PLAN.maxLossPct), 100);
+  const lossPrice = maxLoss ? price * (1 - maxLoss / 100) : null;
+  const name = SHORT_NAMES[target.code] || target.display_name;
+
+  // 1. 購買目的的提醒
+  const purposeWarnings = [];
+  if (PLAN.code === "00708L" && PLAN.horizon !== "lt1") {
+    purposeWarnings.push("00708L 是 2 倍槓桿、每日重設，長期持有會偏離金價走勢，比較不適合 1 年以上的計畫。");
+  }
+  if (PLAN.horizon === "lt1" && PLAN.purpose !== "swing") {
+    purposeWarnings.push("持有不到 1 年時，金價短期波動可能讓你在虧損時就得賣出，目標金額要保守一點。");
+  }
+  PLAN_UI.purposeWarn.textContent = purposeWarnings.join(" ");
+  PLAN_UI.purposeWarn.hidden = purposeWarnings.length === 0;
+
+  // 2. 投入邊界
+  const yearly = monthly * 12 + extra;
+  let budgetText;
+  if (!budget) {
+    budgetText = "先填總預算，下面的下跌情境才算得出金額。";
+  } else {
+    budgetText = "總預算 " + money(budget) + "。";
+    if (monthly) budgetText += "每月定期 " + money(monthly) + "，約 " + Math.floor(budget / monthly) + " 個月會投滿。";
+    if (yearly > budget) budgetText += " ⚠ 一年的定期投入加上額外加碼（" + money(yearly) + "）已超過總預算，請調整。";
+  }
+  PLAN_UI.budgetOut.textContent = budgetText;
+
+  // 3. 行動條件（數字跟著即時價走）
+  PLAN_UI.condPullback.textContent =
+    "回檔達 " + firstPct + "%" + (firstPrice ? "（約 " + fmtPrice(firstPrice, target) + unit + "）" : "") + "才考慮第一筆，之後照站上的分批紀律";
+  PLAN_UI.condPriorLow.textContent = priorLow
+    ? "跌破起漲前低 " + fmtPrice(priorLow.price, target) + unit + "時停止加碼、重新評估"
+    : "跌破起漲前低時停止加碼、重新評估" + (priorBroken ? "（目前已跌破所有前低）" : "");
+  PLAN_UI.condLossLimit.textContent = lossPrice
+    ? "比現在跌超過 " + maxLoss + "%（約 " + fmtPrice(lossPrice, target) + unit + "）時，重新檢視整份計畫"
+    : "跌超過我能接受的虧損時，重新檢視整份計畫";
+  PLAN_UI.stageOut.innerHTML = "";
+  PLAN_UI.stageOut.appendChild(document.createTextNode(name + " 現價 "));
+  PLAN_UI.stageOut.appendChild(el("b", { textContent: fmtPrice(price, target) + unit }));
+  if (ps) {
+    PLAN_UI.stageOut.appendChild(document.createTextNode("，從近 30 天高點回檔 " + fmt(ps.pullback_pct, 1) + "%，目前落在「" + ps.stage + "」。"));
+  }
+
+  // 4. 下跌情境
+  const table = PLAN_UI.dropTable;
+  table.innerHTML = "";
+  const head = el("tr", {});
+  ["價格下跌", "價格約", budget ? "總預算可能虧損" : "每 10 萬元可能虧損"].forEach((text) => head.appendChild(el("th", { textContent: text })));
+  table.appendChild(head);
+  const base = budget || 100000;
+  PLAN_DROPS.forEach((pct) => {
+    const row = el("tr", { className: maxLoss && pct > maxLoss ? "over" : "" });
+    row.appendChild(el("td", { textContent: "跌 " + pct + "%" + (maxLoss && pct > maxLoss ? "（超過可接受）" : "") }));
+    row.appendChild(el("td", { textContent: fmtPrice(price * (1 - pct / 100), target) + unit }));
+    row.appendChild(el("td", { textContent: money((base * pct) / 100) }));
+    table.appendChild(row);
+  });
+  PLAN_UI.dropNote.textContent =
+    "以目前價格、總預算全部投入估算；分批買進的實際平均成本會不同。" +
+    (PLAN.code === "00708L" ? "00708L 是 2 倍槓桿：金價跌 10%，它大約跌 20%（每日重設，實際會偏離）。" : "");
+  const moneyWarnings = [];
+  if (PLAN.needMoney !== "no") {
+    moneyWarnings.push("持有期間" + (PLAN.needMoney === "yes" ? "一定" : "可能") + "會用到這筆錢：下跌時可能被迫在低點賣出。建議把會用到的部分移出總預算，只用短期內不會動用的錢。");
+  }
+  if (maxLoss && budget && maxLoss < 10) {
+    moneyWarnings.push("可接受虧損低於 10%：黃金一年內跌 10% 以上並不少見，可以考慮降低總預算。");
+  }
+  PLAN_UI.moneyWarn.textContent = moneyWarnings.join(" ");
+  PLAN_UI.moneyWarn.hidden = moneyWarnings.length === 0;
+
+  // 摘要
+  const lines = [];
+  const updated = PLAN.updatedAt ? new Date(PLAN.updatedAt) : new Date();
+  lines.push("更新：" + updated.getFullYear() + "/" + (updated.getMonth() + 1) + "/" + updated.getDate());
+  lines.push("");
+  lines.push("1. 購買目的：" + optionLabel(PLAN_PURPOSES, PLAN.purpose) + "；預計持有 " + optionLabel(PLAN_HORIZONS, PLAN.horizon) + "。" + (PLAN.purposeNote ? "備註：" + PLAN.purposeNote : ""));
+  lines.push(
+    "2. 投入邊界：" + name + "；總預算 " + (budget ? money(budget) : "（未填）") +
+      (monthly ? "；每月定期 " + money(monthly) : "") + (extra ? "；額外加碼預算 " + money(extra) : "") + "。"
+  );
+  lines.push("3. 行動條件：");
+  if (PLAN.conditions.pullback) lines.push("・" + PLAN_UI.condPullback.textContent);
+  if (PLAN.conditions.priorLow) lines.push("・" + PLAN_UI.condPriorLow.textContent);
+  if (PLAN.conditions.keepMonthly) lines.push("・" + PLAN_UI.condKeepMonthly.textContent);
+  if (PLAN.conditions.lossLimit) lines.push("・" + PLAN_UI.condLossLimit.textContent);
+  if (PLAN.customCondition) lines.push("・" + PLAN.customCondition);
+  lines.push(
+    "4. 下跌情境：以目前 " + fmtPrice(price, target) + unit + "估算，" +
+      PLAN_DROPS.map((pct) => "跌 " + pct + "% 約虧 " + money((base * pct) / 100)).join("、") +
+      (budget ? "" : "（以每 10 萬元計）") + "。" +
+      (maxLoss ? "我最多能接受虧損 " + maxLoss + "%" + (budget ? "（約 " + money((budget * maxLoss) / 100) + "）" : "") + "。" : "") +
+      "持有期間" + optionLabel(PLAN_NEED_MONEY, PLAN.needMoney) + "這筆錢。"
+  );
+  const chosenTriggers = PLAN_TRIGGERS.filter((item) => PLAN.triggers[item[0]]).map((item) => item[1]);
+  lines.push(
+    "5. 檢視時間：" + optionLabel(PLAN_REVIEW_EVERY, PLAN.reviewEvery) + "回顧一次，下次 " + (PLAN.nextReview || "（未填）") + "。" +
+      (chosenTriggers.length ? "遇到以下情況就重設計畫：" + chosenTriggers.join("、") + "。" : "")
+  );
+  lines.push("");
+  lines.push("這份計畫依金羅盤 " + (SITE_DATA.generated_at || "").slice(0, 10) + " 的資料試算，僅供個人規劃參考，不構成投資建議。");
+  PLAN_UI.summaryText.textContent = lines.join("\n");
+}
+
+// ---- AI 小幫手「金福企」（聊天視窗）-------------------------------------------
 //
 // 對話送到 Worker 的 /chat，由它帶上站上最新資料、先由程式算好試算結果，再交給 Cloudflare Workers AI 用白話說明。
 // 網頁只知道 Worker 網址，不碰任何金鑰。對話只存在這個頁面的記憶體裡，關掉頁面就清掉。
@@ -961,11 +1459,11 @@ const ASSISTANT = { busy: false, messages: [], log: null, input: null, send: nul
 const ASSISTANT_LIMITS = { messages: 8, total: 5000, assistantChars: 1500 };
 
 function assistantErrorText(status, code) {
-  if (status === 503 || code === "not_configured") return "小幫手還沒啟用，其他功能不受影響。";
+  if (status === 503 || code === "not_configured") return "金福企還沒啟用，其他功能不受影響。";
   if (code === "rate_limited") return "問得有點快，請過幾分鐘再試。";
   if (code === "daily_limit") return "今天的提問次數已達上限，明天再來問吧。";
   if (code === "message_too_long" || code === "too_many_messages") return "這段對話太長了，請重新整理頁面再開始。";
-  return "小幫手暫時無法使用，請稍後再試。";
+  return "金福企暫時無法使用，請稍後再試。";
 }
 
 function buildSendMessages() {
@@ -1047,6 +1545,7 @@ function assistantSuggestions() {
     "我有 10 萬元，幫我算分批計畫",
     "存摺和 ETF 哪個成本低？",
     "我是新手，要怎麼開始買黃金？",
+    "「我的黃金購買計畫」要怎麼填？",
   ];
 }
 
@@ -1063,23 +1562,23 @@ function updateAssistantChips() {
 function setAssistantOpen(open) {
   ASSISTANT.panel.classList.toggle("open", open);
   ASSISTANT.fab.setAttribute("aria-expanded", open ? "true" : "false");
-  ASSISTANT.fab.textContent = open ? "收起小幫手" : "問小幫手";
+  ASSISTANT.fab.textContent = open ? "收起金福企" : "問金福企";
   if (open) ASSISTANT.input.focus();
 }
 
 function initAssistant() {
   if (!SITE_DATA.assistant_url) return;
-  const fab = el("button", { className: "assistant-fab", type: "button", textContent: "問小幫手" });
+  const fab = el("button", { className: "assistant-fab", type: "button", textContent: "問金福企" });
   fab.setAttribute("aria-expanded", "false");
   fab.setAttribute("aria-controls", "assistant-panel");
   const panel = el("section", { className: "assistant-panel", id: "assistant-panel" });
   panel.setAttribute("role", "dialog");
-  panel.setAttribute("aria-label", "金羅盤 AI 小幫手");
+  panel.setAttribute("aria-label", "金羅盤 AI 小幫手：金福企");
 
   const head = el("div", { className: "assistant-head" });
-  head.appendChild(el("b", { textContent: "金羅盤小幫手" }));
+  head.appendChild(el("b", { textContent: "金福企　金羅盤 AI 小幫手" }));
   const close = el("button", { type: "button", textContent: "×" });
-  close.setAttribute("aria-label", "關閉小幫手");
+  close.setAttribute("aria-label", "關閉金福企");
   head.appendChild(close);
   panel.appendChild(head);
 
@@ -1098,7 +1597,7 @@ function initAssistant() {
   form.appendChild(send);
   panel.appendChild(form);
   panel.appendChild(
-    el("p", { className: "assistant-note", textContent: "小幫手根據本站最新數據回答，會用程式計算數字；不給買賣指令，也不知道新聞。僅供研究參考。" })
+    el("p", { className: "assistant-note", textContent: "金福企根據本站最新數據回答，會用程式計算數字；不給買賣指令，也不知道新聞。僅供研究參考。" })
   );
 
   Object.assign(ASSISTANT, { log: log, input: input, send: send, chips: chips, panel: panel, fab: fab });
@@ -1114,7 +1613,7 @@ function initAssistant() {
 
   addAssistantBubble(
     "assistant",
-    "嗨，我是金羅盤小幫手。可以幫你：\n• 解釋指標和目前的階段\n• 試算分批計畫（告訴我預算）\n• 比較黃金存摺和 ETF 的成本\n• 新手開戶導覽\n點下面的問題，或直接輸入。"
+    "嗨，我是金福企，金羅盤的 AI 小幫手。可以幫你：\n• 解釋指標和目前的階段\n• 試算分批計畫（告訴我預算）\n• 比較黃金存摺和 ETF 的成本\n• 新手開戶導覽\n• 說明下方「我的黃金購買計畫」怎麼填\n點下面的問題，或直接輸入。"
   );
   updateAssistantChips();
   document.body.appendChild(fab);
@@ -1171,6 +1670,9 @@ renderDisclaimer();
 currentTargetCode = orderedCodes()[0];
 renderTargetTabs();
 renderTarget(currentTargetCode);
+renderPlan();
+// 從封面「建立我的購買計畫」連過來（dashboard.html#plan）：計畫區是 JS 產生的，瀏覽器自己捲不到，手動捲過去。
+if (location.hash === "#plan") document.getElementById("plan").scrollIntoView();
 initAssistant();
 markPageUpdatedNow();
 if (SITE_DATA.auto_refresh_seconds) {
