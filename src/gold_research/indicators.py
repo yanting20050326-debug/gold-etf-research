@@ -259,6 +259,31 @@ def prior_swing_low(
     return None
 
 
+def has_broken_swing_low(
+    closes: list[float], window: int = 30, swing_span: int | None = None
+) -> bool:
+    """過去有過局部低點，但之後全都被跌破了（價格正處於創新低的狀態）。
+
+    prior_swing_low() 找不到有效前低時有兩種原因：資料太少、或根本沒有任何局部
+    低點（一路上漲）——這兩種都是「不知道」；另一種是曾經有過低點、卻被後來的
+    收盤價全部跌破，這代表價格已經跌到所有前低之下。第三種才是這裡要抓的，
+    畫面上必須明講「已跌破所有前低」，不能跟資料不足混為一談。
+    """
+    if len(closes) < window:
+        return False
+    if swing_span is None:
+        swing_span = dynamic_swing_span(closes)
+    n = len(closes)
+    for i in range(n - 1 - swing_span, swing_span - 1, -1):
+        left = closes[i - swing_span : i]
+        right = closes[i + 1 : i + 1 + swing_span]
+        if len(left) < swing_span or len(right) < swing_span:
+            continue
+        if closes[i] <= min(left) and closes[i] <= min(right):
+            return True
+    return False
+
+
 def trend_still_intact(
     close: float, ma20: float | None, prior_low_price: float | None
 ) -> bool | None:

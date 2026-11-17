@@ -73,7 +73,13 @@ export function parseTwseRow(row) {
       price = previousClose;
     }
   }
-  return { close: roundPrice(price), quote_time: row.t ?? "", is_realtime: true };
+  // prev_close（TWSE 的 y）讓網頁在盤中也能用正確的昨收算漲跌幅，不必等下一次建站。
+  return {
+    close: roundPrice(price),
+    quote_time: row.t ?? "",
+    is_realtime: true,
+    prev_close: roundPrice(previousClose),
+  };
 }
 
 export function parseTwsePayload(payload) {

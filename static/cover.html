@@ -5,167 +5,190 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>金羅盤</title>
 <style>
-  @keyframes needleSpin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+  /* 配色取自臺灣企銀官網：橘紅主色、黃輔色、米白底、暖灰框線。 */
+  :root {
+    --brand: #da3700;
+    --brand-dark: #b02e00;
+    --brand-soft: #ffead7;
+    --cream: #fffbf8;
+    --cream-2: #fff5e8;
+    --yellow: #fabe00;
+    --text: #333333;
+    --text-soft: #73625c;
+    --line: #d6d0c9;
   }
-  @keyframes ringDrift {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(-360deg); }
-  }
-  @keyframes glowPulse {
-    0%, 100% { opacity: 0.35; transform: scale(1); }
-    50% { opacity: 0.65; transform: scale(1.08); }
-  }
-  @keyframes titleRise {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
+  @keyframes needleSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  @keyframes ringDrift { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
+  @keyframes glowPulse { 0%, 100% { opacity: 0.55; transform: scale(1); } 50% { opacity: 0.9; transform: scale(1.06); } }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; font-family: Helvetica, Arial, sans-serif; }
+  html, body { margin: 0; min-height: 100%; }
+  body { background: var(--cream); color: var(--text); font-family: "Microsoft JhengHei", "Noto Sans TC", system-ui, sans-serif; }
+
   .cover {
     position: relative;
-    width: 100%;
-    height: 100vh;
-    min-height: 640px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
-    background:
-      radial-gradient(circle at 50% 42%, #2a1d0c 0%, #150e05 42%, #060402 78%, #020101 100%);
+  }
+  .topband { height: 10px; background: var(--brand); }
+  .topband::after { content: ""; display: block; height: 3px; background: var(--yellow); margin-top: 10px; }
+
+  .stage {
+    flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: clamp(18px, 4vh, 34px);
-    padding: 24px;
-  }
-  .brand {
+    gap: clamp(14px, 3vh, 26px);
+    padding: 32px 20px 24px;
     text-align: center;
-    animation: titleRise 1.1s ease-out both;
   }
-  .brand-title {
-    margin: 0;
-    font-size: clamp(30px, 6vw, 48px);
-    font-weight: 700;
-    letter-spacing: 0.18em;
-    background: linear-gradient(180deg, #ffe9b8 0%, #d9a54a 55%, #a6772a 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    text-shadow: 0 2px 18px rgba(217, 165, 74, 0.35);
-  }
-  .brand-subtitle {
-    margin: 6px 0 0;
-    font-size: clamp(11px, 1.6vw, 13px);
-    letter-spacing: 0.5em;
-    color: rgba(233, 197, 128, 0.55);
-    text-transform: uppercase;
-  }
-  .compass-wrap {
-    position: relative;
-    width: min(46vw, 260px);
-    aspect-ratio: 1 / 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .compass-glow {
-    position: absolute;
-    inset: -18%;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(230, 178, 87, 0.55) 0%, rgba(230, 178, 87, 0) 70%);
-    animation: glowPulse 4.5s ease-in-out infinite;
-    pointer-events: none;
-  }
-  .compass-svg {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    filter: drop-shadow(0 6px 24px rgba(0, 0, 0, 0.55));
-  }
-  .compass-ring {
-    transform-origin: 150px 150px;
-    animation: ringDrift 90s linear infinite;
-  }
-  .compass-needle {
-    transform-origin: 150px 150px;
-    animation: needleSpin 48s linear infinite;
-  }
+  .stage > * { animation: rise 0.9s ease-out both; }
+  .stage > :nth-child(2) { animation-delay: 0.08s; }
+  .stage > :nth-child(3) { animation-delay: 0.16s; }
+  .stage > :nth-child(4) { animation-delay: 0.24s; }
+  .stage > :nth-child(5) { animation-delay: 0.32s; }
+
+  .compass-wrap { position: relative; width: min(42vw, 210px); aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center; }
+  .compass-glow { position: absolute; inset: -22%; border-radius: 50%; background: radial-gradient(circle, rgba(250, 190, 0, 0.45) 0%, rgba(255, 234, 215, 0.5) 45%, rgba(255, 251, 248, 0) 72%); animation: glowPulse 5s ease-in-out infinite; pointer-events: none; }
+  .compass-svg { position: relative; width: 100%; height: 100%; filter: drop-shadow(0 6px 14px rgba(218, 55, 0, 0.22)); }
+  .compass-ring { transform-origin: 150px 150px; animation: ringDrift 90s linear infinite; }
+  .compass-needle { transform-origin: 150px 150px; animation: needleSpin 48s linear infinite; }
+
+  .brand-title { margin: 0; font-size: clamp(40px, 8vw, 64px); font-weight: 700; letter-spacing: 0.16em; color: var(--brand); line-height: 1.1; }
+  .brand-subtitle { margin: 6px 0 0; font-size: clamp(12px, 1.6vw, 14px); letter-spacing: 0.5em; color: var(--text-soft); text-transform: uppercase; }
+  .tagline { margin: 0; max-width: 30em; font-size: clamp(16px, 2.4vw, 20px); line-height: 1.7; color: var(--text); }
+  .tagline b { color: var(--brand-dark); }
+
+  .ticker { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; visibility: hidden; }
+  .ticker.ready { visibility: visible; }
+  .tick { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 8px 16px; min-width: 150px; }
+  .tick-name { display: block; font-size: 13px; color: var(--text-soft); }
+  .tick-price { display: block; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+  .tick-price.off { font-size: 15px; font-weight: 400; color: var(--text-soft); }
+
   .enter-button {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 12px 34px;
-    background: rgba(230, 178, 87, 0.08);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(230, 178, 87, 0.45);
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 14px 40px;
+    background: var(--brand); color: #fff;
     border-radius: 999px;
-    color: #f3d9a4;
-    font-size: 15px;
-    letter-spacing: 0.35em;
+    font-size: 17px; font-weight: 700; letter-spacing: 0.2em;
     text-decoration: none;
-    text-transform: uppercase;
-    transition: all 0.3s ease;
+    box-shadow: 0 8px 22px rgba(218, 55, 0, 0.28);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
   }
-  .enter-button:hover {
-    background: rgba(230, 178, 87, 0.18);
-    border-color: rgba(230, 178, 87, 0.75);
-    box-shadow: 0 8px 28px rgba(230, 178, 87, 0.25);
-    transform: translateY(-1px);
-  }
-  .enter-button:active {
-    transform: translateY(0);
-    background: rgba(230, 178, 87, 0.24);
+  .enter-button:hover { background: var(--brand-dark); transform: translateY(-1px); box-shadow: 0 12px 28px rgba(218, 55, 0, 0.34); }
+  .enter-button:active { transform: translateY(0); }
+  .enter-button:focus-visible { outline: 3px solid var(--yellow); outline-offset: 3px; }
+
+  .points { display: flex; gap: 10px 22px; flex-wrap: wrap; justify-content: center; margin: 0; padding: 0; list-style: none; font-size: 14px; color: var(--text-soft); }
+  .points li::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--yellow); margin-right: 8px; vertical-align: 1px; }
+
+  .foot { padding: 14px 20px 20px; text-align: center; font-size: 12.5px; color: var(--text-soft); }
+
+  @media (max-width: 520px) {
+    .tick { min-width: 0; flex: 1 1 140px; }
+    .enter-button { padding: 13px 32px; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .compass-ring, .compass-needle, .compass-glow, .brand { animation: none; }
+    .compass-ring, .compass-needle, .compass-glow, .stage > * { animation: none; }
   }
 </style>
 </head>
 <body>
 <div class="cover">
-  <div class="brand">
-    <h1 class="brand-title">金羅盤</h1>
-    <p class="brand-subtitle">Gold Compass</p>
-  </div>
+  <div class="topband"></div>
+  <main class="stage">
+    <div class="compass-wrap" aria-hidden="true">
+      <div class="compass-glow"></div>
+      <svg class="compass-svg" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="150" cy="150" r="128" fill="#fff" stroke="#da3700" stroke-width="3" />
+        <circle cx="150" cy="150" r="104" fill="none" stroke="#ffead7" stroke-width="10" />
+        <circle cx="150" cy="150" r="104" fill="none" stroke="#fabe00" stroke-width="1.5" />
 
-  <div class="compass-wrap">
-    <div class="compass-glow"></div>
-    <svg class="compass-svg" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="150" cy="150" r="128" fill="none" stroke="rgba(230,178,87,0.28)" stroke-width="1.5" />
-      <circle cx="150" cy="150" r="104" fill="none" stroke="rgba(230,178,87,0.16)" stroke-width="1" />
+        <g class="compass-ring" stroke="#da3700" stroke-width="3" stroke-linecap="round">
+          <line x1="150" y1="18" x2="150" y2="40" />
+          <line x1="150" y1="260" x2="150" y2="282" />
+          <line x1="18" y1="150" x2="40" y2="150" />
+          <line x1="260" y1="150" x2="282" y2="150" />
+        </g>
+        <g class="compass-ring" stroke="#d6d0c9" stroke-width="2" stroke-linecap="round">
+          <line x1="150" y1="26" x2="150" y2="40" transform="rotate(30 150 150)" />
+          <line x1="150" y1="26" x2="150" y2="40" transform="rotate(60 150 150)" />
+          <line x1="150" y1="26" x2="150" y2="40" transform="rotate(120 150 150)" />
+          <line x1="150" y1="26" x2="150" y2="40" transform="rotate(150 150 150)" />
+          <line x1="150" y1="26" x2="150" y2="40" transform="rotate(210 150 150)" />
+          <line x1="150" y1="26" x2="150" y2="40" transform="rotate(240 150 150)" />
+          <line x1="150" y1="26" x2="150" y2="40" transform="rotate(300 150 150)" />
+          <line x1="150" y1="26" x2="150" y2="40" transform="rotate(330 150 150)" />
+        </g>
 
-      <g class="compass-ring" stroke="rgba(230,178,87,0.55)" stroke-width="2" stroke-linecap="round">
-        <line x1="150" y1="18" x2="150" y2="40" />
-        <line x1="150" y1="260" x2="150" y2="282" />
-        <line x1="18" y1="150" x2="40" y2="150" />
-        <line x1="260" y1="150" x2="282" y2="150" />
-      </g>
-      <g class="compass-ring" stroke="rgba(230,178,87,0.28)" stroke-width="1.3" stroke-linecap="round">
-        <line x1="150" y1="26" x2="150" y2="40" transform="rotate(30 150 150)" />
-        <line x1="150" y1="26" x2="150" y2="40" transform="rotate(60 150 150)" />
-        <line x1="150" y1="26" x2="150" y2="40" transform="rotate(120 150 150)" />
-        <line x1="150" y1="26" x2="150" y2="40" transform="rotate(150 150 150)" />
-        <line x1="150" y1="26" x2="150" y2="40" transform="rotate(210 150 150)" />
-        <line x1="150" y1="26" x2="150" y2="40" transform="rotate(240 150 150)" />
-        <line x1="150" y1="26" x2="150" y2="40" transform="rotate(300 150 150)" />
-        <line x1="150" y1="26" x2="150" y2="40" transform="rotate(330 150 150)" />
-      </g>
+        <text x="150" y="68" text-anchor="middle" font-size="20" letter-spacing="2" fill="#b02e00" font-weight="700">N</text>
 
-      <polygon points="150,142 145,150 150,158 155,150" fill="rgba(230,178,87,0.85)" />
-      <text x="150" y="34" text-anchor="middle" font-size="15" letter-spacing="2"
-            fill="rgba(243,217,164,0.85)" font-weight="700">N</text>
+        <g class="compass-needle">
+          <polygon points="150,82 161,150 139,150" fill="#da3700" />
+          <polygon points="150,218 161,150 139,150" fill="#fabe00" />
+        </g>
+        <circle cx="150" cy="150" r="9" fill="#fff" stroke="#da3700" stroke-width="3" />
+      </svg>
+    </div>
 
-      <g class="compass-needle">
-        <polygon points="150,58 160,150 140,150" fill="#f0c878" />
-        <polygon points="150,242 160,150 140,150" fill="#7a5220" />
-      </g>
-      <circle cx="150" cy="150" r="7" fill="#f3d9a4" stroke="#3a2a10" stroke-width="1.5" />
-    </svg>
-  </div>
+    <div>
+      <h1 class="brand-title">金羅盤</h1>
+      <p class="brand-subtitle">Gold Compass</p>
+    </div>
 
-  <a class="enter-button" href="dashboard.html">Enter</a>
+    <p class="tagline">國際金價與黃金 ETF，<b>回檔到哪一格、現在該做什麼</b>，一個畫面看清楚。</p>
+
+    <div class="ticker" id="ticker" aria-label="即時報價">
+      <div class="tick" data-code="GCF"><span class="tick-name">國際金價 COMEX</span><span class="tick-price">—</span></div>
+      <div class="tick" data-code="00635U"><span class="tick-name">元大S&amp;P黃金 00635U</span><span class="tick-price">—</span></div>
+      <div class="tick" data-code="00708L"><span class="tick-name">黃金正2 00708L</span><span class="tick-price">—</span></div>
+    </div>
+
+    <a class="enter-button" href="dashboard.html">進入儀表板 <span aria-hidden="true">→</span></a>
+
+    <ul class="points">
+      <li>六個指標，一句話看懂</li>
+      <li>分批進場階段一目了然</li>
+      <li>盤中即時報價</li>
+    </ul>
+  </main>
+  <p class="foot">商品／避險資產研究參考，不構成投資建議，不自動下單，不保證收益。</p>
 </div>
+<script>
+// 即時價格列：向報價 Worker 取價；連不上就維持隱藏，封面照常運作。
+(function () {
+  var WORKER_URL = "https://gold-quote-worker.abilabnpust.workers.dev/";
+  var ticker = document.getElementById("ticker");
+  function fmt(v) {
+    return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function load() {
+    fetch(WORKER_URL + "?ts=" + Date.now())
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (data) {
+        if (!data || !data.quotes || Object.keys(data.quotes).length === 0) return;
+        ticker.querySelectorAll(".tick").forEach(function (tick) {
+          var quote = data.quotes[tick.dataset.code];
+          var price = tick.querySelector(".tick-price");
+          if (quote && typeof quote.close === "number") {
+            price.textContent = fmt(quote.close);
+            price.classList.remove("off");
+          } else {
+            price.textContent = "非盤中";
+            price.classList.add("off");
+          }
+        });
+        ticker.classList.add("ready");
+      })
+      .catch(function () {});
+  }
+  load();
+  setInterval(load, 30000);
+})();
+</script>
 </body>
 </html>

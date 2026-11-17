@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -27,6 +28,9 @@ GEMINI_API_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
     "gemini-3.6-flash:generateContent"
 )
+
+GEMINI_TIMEOUT_SECONDS = 60
+GEMINI_ATTEMPTS = 2
 
 AI_SUMMARY_DISCLAIMER = "AI 根據價格與總體數字推測，非真實新聞報導，僅供研究參考。"
 
@@ -63,29 +67,88 @@ def generate_daily_summary(
         usdtwd_change_pct,
         technical_label,
     )
-    try:
-        response = requests.post(
-            GEMINI_API_URL,
-            params={"key": api_key},
-            json={"contents": [{"parts": [{"text": prompt}]}]},
-            timeout=20,
-        )
-        response.raise_for_status()
-        payload = response.json()
-        text = payload["candidates"][0]["content"]["parts"][0]["text"].strip()
-    except (
-        requests.RequestException,
-        ValueError,
-        KeyError,
-        IndexError,
-        TypeError,
-    ) as exc:
-        logger.warning("{} AI 摘要產生失敗：{}，沿用舊快取", display_name, exc)
+    text = _call_gemini(display_name, api_key, prompt)
+    if text is None:
         return cached
 
     summary = AiSummary(text=text, generated_date=today.isoformat())
     _write_cache(cache_path, summary)
     return summary
+
+
+def _call_gemini(display_name: str, api_key: str, prompt: str) -> str | None:
+    """呼叫 Gemini；逾時或暫時性錯誤重試一次，最後仍失敗就回傳 None。
+
+    實測 20 秒的讀取逾時在 Actions 上三個標的幾乎都會逾時，所以放寬到
+    GEMINI_TIMEOUT_SECONDS；仍失敗時交給呼叫端沿用舊快取，不讓建站中斷。
+    """
+    last_error = ""
+    for attempt in range(GEMINI_ATTEMPTS):
+        try:
+            response = requests.post(
+                GEMINI_API_URL,
+                params={"key": api_key},
+                json={"contents": [{"parts": [{"text": prompt}]}]},
+                timeout=GEMINI_TIMEOUT_SECONDS,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            return payload["candidates"][0]["content"]["parts"][0]["text"].strip()
+        except (
+            requests.RequestException,
+            ValueError,
+            KeyError,
+            IndexError,
+            TypeError,
+        ) as exc:
+            last_error = redact_api_key(str(exc))
+            logger.warning(
+                "{} AI 摘要第 {}/{} 次嘗試失敗：{}",
+                display_name,
+                attempt + 1,
+                GEMINI_ATTEMPTS,
+                last_error,
+            )
+    logger.warning("{} AI 摘要產生失敗：{}，沿用舊快取", display_name, last_error)
+    return None
+
+
+def redact_api_key(message: str) -> str:
+    """遮掉訊息裡的 `key=...`。
+
+    requests 的 HTTPError／逾時訊息會原樣帶出完整網址，而 Gemini 的金鑰就放在
+    網址的 query string，直接記錄會把金鑰寫進日誌。
+    """
+    return re.sub(r"([?&]key=)[^&\s)\"']+", r"\1***", message)
+
+
+def restore_cache_from_published(
+    published_targets: dict, cache_dir: Path, generated_at_iso: str | None
+) -> int:
+    """Actions 每次都從空的 data_cache 開始，所以先用已發布的摘要把快取補回來。
+
+    只補「本機還沒有快取檔」的標的，回傳補了幾個。已發布資料若有
+    `generated_date` 就沿用；舊版資料沒有這個欄位時，用已發布檔本身的建置日期
+    當作產生日（比今天舊，所以今天仍會嘗試重新產生，但在成功之前頁面不會變空白）。
+    """
+    restored = 0
+    fallback_date = (generated_at_iso or "1970-01-01")[:10]
+    for code, target in published_targets.items():
+        summary = target.get("ai_summary") if isinstance(target, dict) else None
+        if not isinstance(summary, dict) or not summary.get("text"):
+            continue
+        cache_path = cache_dir / f"ai_summary_{code}.json"
+        if cache_path.exists():
+            continue
+        _write_cache(
+            cache_path,
+            AiSummary(
+                text=summary["text"],
+                generated_date=summary.get("generated_date") or fallback_date,
+            ),
+        )
+        restored += 1
+    return restored
 
 
 def _build_prompt(

@@ -5,6 +5,7 @@ from gold_research.indicators import (
     divergence_flag,
     dynamic_swing_span,
     exponential_moving_average,
+    has_broken_swing_low,
     macd,
     macd_golden_cross,
     momentum_stabilizing,
@@ -317,6 +318,34 @@ def test_prior_swing_low_uses_dynamic_span_when_volatility_recently_compressed()
     assert fixed_span3["price"] == pytest.approx(70.0)
     assert dynamic["price"] == pytest.approx(75.0)
     assert dynamic["days_ago"] < fixed_span3["days_ago"]
+
+
+def _sawtooth_new_lows(waves: int = 6) -> list[float]:
+    """每一波低點都比上一波低，結尾又跌破最近一個低點：所有前低都失效。"""
+    closes: list[float] = []
+    low = 100.0
+    for _ in range(waves):
+        closes += [low + 6, low + 4, low + 2, low, low + 2, low + 4]
+        low -= 4
+    return closes + [low + 2, low + 1, low]
+
+
+def test_falling_series_has_no_valid_prior_low_but_has_broken_ones():
+    closes = _sawtooth_new_lows()
+    assert len(closes) >= 30
+    assert prior_swing_low(closes, 30, swing_span=2) is None
+    assert has_broken_swing_low(closes, 30, swing_span=2) is True
+
+
+def test_steadily_rising_series_has_no_broken_swing_low():
+    closes = [100 + i * 0.5 for i in range(40)]
+    assert prior_swing_low(closes, 30) is None
+    # 沒有任何低點被跌破，只是沒有結構可判斷，不能說「已跌破」。
+    assert has_broken_swing_low(closes, 30) is False
+
+
+def test_has_broken_swing_low_false_when_data_is_too_short():
+    assert has_broken_swing_low(_sawtooth_new_lows(waves=2), 30) is False
 
 
 def test_trend_still_intact_true_when_above_both_references():

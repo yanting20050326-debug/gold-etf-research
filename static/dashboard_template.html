@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>金羅盤</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  /* 配色取自臺灣企銀官網：橘紅主色、黃輔色、米白底、暖灰框線。
+     漲跌色維持台股慣例（漲紅跌綠），不跟品牌橘混用。 */
+  :root {
+    --brand: #da3700;
+    --brand-dark: #b02e00;
+    --brand-soft: #ffead7;
+    --cream: #fffbf8;
+    --cream-2: #fff5e8;
+    --yellow: #fabe00;
+    --text: #333333;
+    --text-soft: #73625c;
+    --line: #d6d0c9;
+    --up: #c62828;
+    --down: #287d3a;
+    --cold: #4a6f8f;
+    --cold-bar: #b8c7d6;
+    --mid-bar: #e9e2d9;
+    --hot-bar: #f2a58a;
+    --ok-bg: #e8f3ea;
+    --ok: #1f6b30;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--cream); color: var(--text); font-family: "Microsoft JhengHei", "Noto Sans TC", system-ui, sans-serif; font-size: 15px; line-height: 1.55; }
+  a { color: var(--brand-dark); }
+  h1, h2, h3, p { margin: 0; }
+
+  .topbar { background: var(--brand); color: #fff; }
+  .topbar-inner { max-width: 1240px; margin: 0 auto; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .topbar h1 { display: inline; font-size: 22px; font-weight: 700; }
+  .brand-sub { font-size: 12px; letter-spacing: 0.25em; opacity: 0.85; margin-left: 10px; }
+  .back { color: #fff; text-decoration: none; font-size: 13px; opacity: 0.9; margin-right: 12px; }
+  .status { font-size: 13px; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .live-dot { display: inline-block; width: 9px; height: 9px; border-radius: 999px; background: #22a447; margin-right: 6px; vertical-align: middle; }
+  .status .live-dot { background: var(--yellow); margin-right: 0; }
+  .disclaimer { background: var(--cream-2); color: var(--text-soft); font-size: 12.5px; text-align: center; padding: 6px 16px; border-bottom: 1px solid var(--brand-soft); }
+
+  .shell { max-width: 1240px; margin: 0 auto; padding: 14px 16px 40px; }
+
+  .target-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 14px; }
+  .tcard { text-align: left; font: inherit; color: inherit; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; cursor: pointer; }
+  .tcard:hover { border-color: var(--brand); }
+  .tcard.active { border: 2px solid var(--brand); padding: 11px 13px; box-shadow: 0 4px 14px rgba(218, 55, 0, 0.15); }
+  .tcard-name { font-size: 13px; color: var(--text-soft); }
+  .tcard-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 2px 0 6px; flex-wrap: wrap; }
+  .tcard-price { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; }
+  .chg { font-size: 14px; font-weight: 700; white-space: nowrap; }
+  .chg.up { color: var(--up); }
+  .chg.down { color: var(--down); }
+  .chg.flat { color: var(--text-soft); }
+  .chip { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 999px; background: var(--cream-2); color: var(--brand-dark); }
+  .chip.ok { background: var(--ok-bg); color: var(--ok); }
+  .chip.warn { background: var(--brand-soft); color: var(--brand-dark); }
+
+  .main { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 14px; align-items: start; }
+  .stack { display: flex; flex-direction: column; gap: 14px; }
+  .panel { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .panel h2 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+  .note { font-size: 12.5px; color: var(--text-soft); line-height: 1.5; }
+
+  .hero-label { font-size: 13px; color: var(--text-soft); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .hero-price { display: flex; align-items: baseline; gap: 12px; margin: 2px 0; flex-wrap: wrap; }
+  .hero-price .num { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+  .hero-price .chg { font-size: 18px; }
+  .quote-line { font-size: 13px; color: var(--text-soft); }
+  .divider { height: 1px; background: var(--brand-soft); margin: 12px 0; }
+
+  .steps { display: flex; gap: 4px; }
+  .step { flex: 1; height: 10px; border-radius: 5px; background: var(--cream-2); border: 1px solid var(--brand-soft); }
+  .step.passed { background: #f4b79f; border-color: #f4b79f; }
+  .step.current { background: var(--brand); border-color: var(--brand); }
+  .step-labels { display: flex; gap: 4px; font-size: 12px; color: var(--text-soft); margin-top: 3px; }
+  .step-labels span { flex: 1; text-align: center; }
+  .step-labels span.current { color: var(--brand-dark); font-weight: 700; }
+  .stage-line { font-size: 17px; font-weight: 700; color: var(--brand-dark); margin-top: 10px; }
+  .stage-hint { font-size: 14px; margin-top: 2px; }
+  .signal-row { margin-top: 8px; font-size: 13px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .fact { background: var(--cream-2); border-radius: 8px; padding: 6px 10px; }
+  .fact.warn { background: var(--brand-soft); }
+  .fact.warn b { color: var(--brand-dark); }
+  .fact b { display: block; font-size: 16px; }
+  .fact span { font-size: 12px; color: var(--text-soft); }
+
+  .section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+  .section-head h2 { margin: 0; }
+  .legend { font-size: 12.5px; color: var(--text-soft); display: flex; gap: 12px; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; }
+  .ind-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .ind { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+  .ind-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .ind-name { font-size: 15px; font-weight: 700; }
+  .ind-name small { display: block; font-size: 12px; font-weight: 400; color: var(--text-soft); }
+  .ind-value { font-size: 30px; font-weight: 700; line-height: 1.1; text-align: right; white-space: nowrap; }
+  .ind-sub { font-size: 12.5px; color: var(--text-soft); text-align: right; }
+  .zonewrap { position: relative; margin-top: 8px; }
+  .zonebar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; }
+  .zone.cold { background: var(--cold-bar); }
+  .zone.mid { background: var(--mid-bar); }
+  .zone.hot { background: var(--hot-bar); }
+  .zonemark { position: absolute; top: -3px; width: 4px; height: 16px; background: var(--text); border-radius: 2px; transform: translateX(-2px); }
+  .zonelabels { display: flex; font-size: 12px; color: var(--text-soft); margin-top: 3px; }
+  .zonelabels span { text-align: center; white-space: nowrap; overflow: hidden; }
+  .verdict { font-size: 14.5px; font-weight: 700; margin-top: 6px; }
+  .verdict.cold { color: var(--cold); }
+  .verdict.hot { color: var(--brand-dark); }
+  .plain { font-size: 12.5px; color: var(--text-soft); line-height: 1.5; }
+
+  .row-b { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+  .score-big { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .score-big .num { font-size: 36px; font-weight: 700; color: var(--brand); line-height: 1.1; }
+  .score-big .num small { font-size: 15px; }
+  .score-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .score-chips .chip { background: var(--cream-2); color: var(--text); font-weight: 400; }
+  .ai-text { font-size: 15px; line-height: 1.7; }
+  .macro-big { display: flex; align-items: baseline; gap: 10px; }
+  .macro-big .num { font-size: 28px; font-weight: 700; }
+  .spark { display: block; width: 100%; }
+  .range-line { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--text-soft); margin-top: 2px; }
+
+  details.fold { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 0 16px; margin-top: 12px; }
+  details.fold summary { padding: 12px 0; font-weight: 700; cursor: pointer; }
+  details.fold .fold-body { padding: 0 0 14px; font-size: 14px; }
+  details.fold .fold-body p { margin-top: 6px; }
+  .rule-list { margin: 8px 0 0; padding-left: 20px; font-size: 13.5px; line-height: 1.7; }
+  .footer-note { margin-top: 14px; font-size: 12.5px; color: var(--text-soft); }
+
+  @media (max-width: 1020px) {
+    .main { grid-template-columns: 1fr; }
+    .ind-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .row-b { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 620px) {
+    .shell { padding: 10px 10px 32px; }
+    .target-cards { gap: 6px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .tcard { padding: 8px 9px; }
+    .tcard.active { padding: 7px 8px; }
+    .tcard-price { font-size: 19px; }
+    .tcard-row { flex-direction: column; align-items: flex-start; gap: 0; }
+    .tcard .chip { font-size: 11px; padding: 1px 7px; }
+    .ind-grid { grid-template-columns: 1fr; }
+    .hero-price .num { font-size: 34px; }
+    .brand-sub { display: none; }
+  }
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div><a class="back" href="index.html">← 封面</a><h1>金羅盤</h1><span class="brand-sub">GOLD COMPASS</span></div>
+      <div class="status"><span class="live-dot"></span><span id="page-updated-line">更新 <span id="page-updated-time">--:--:--</span></span></div>
+    </div>
+  </header>
+  <div class="disclaimer" id="disclaimer"></div>
+  <main class="shell">
+    <nav class="target-cards" id="target-tabs" aria-label="選擇標的"></nav>
+    <section id="target-view"></section>
+  </main>
+<script>
+const SITE_DATA = __DATA__;
+
+const STAGES = [
+  "觀察區（尚未回檔到位）",
+  "第一筆 20%",
+  "加碼 20%（前提：趨勢沒壞）",
+  "加碼 20%（前提：出現止跌）",
+  "最後 40%（等重新轉強）",
+];
+const STAGE_SHORT = ["觀察區", "第一筆 20%", "加碼 20%", "加碼 20%", "最後 40%"];
+const SHORT_NAMES = {
+  GCF: "國際金價 COMEX",
+  TBBGOLD: "台企銀黃金存摺",
+  "00635U": "元大S&P黃金",
+  "00708L": "黃金正2（2倍）",
+};
+const SCORE_ITEM_LABELS = { rsi14: "RSI", bollinger: "布林", ma20: "MA20", macd: "MACD" };
+
+let currentTargetCode = null;
+const foldState = {};
+
+function fmt(value, digits) {
+  if (value === null || value === undefined) return "資料不足";
+  return value.toFixed(digits);
+}
+
+// 價格小數位數跟著標的走：台企銀牌價是整數元／公克，其餘 2 位。
+function fmtPrice(value, target) {
+  if (value === null || value === undefined) return "—";
+  const digits = target && target.price_digits !== undefined ? target.price_digits : 2;
+  return value.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+function clamp(value, lo, hi) {
+  return Math.max(lo, Math.min(hi, value));
+}
+
+function el(tag, props, children) {
+  const node = document.createElement(tag);
+  Object.assign(node, props || {});
+  (children || []).forEach((child) => node.appendChild(child));
+  return node;
+}
+
+function shortName(target) {
+  return SHORT_NAMES[target.code] || target.display_name;
+}
+
+// 固定順序：國際金價是兩檔台股 ETF 的定價基礎，放最前面。
+const TARGET_ORDER = ["GCF", "TBBGOLD", "00635U", "00708L"];
+function orderedCodes() {
+  const rank = (code) => (TARGET_ORDER.indexOf(code) < 0 ? 99 : TARGET_ORDER.indexOf(code));
+  return Object.keys(SITE_DATA.targets).sort((a, b) => rank(a) - rank(b));
+}
+
+function stageIndex(stage) {
+  return STAGES.indexOf(stage);
+}
+
+function renderDisclaimer() {
+  document.getElementById("disclaimer").textContent = SITE_DATA.disclaimer;
+}
+
+function formatClock(date) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return pad(date.getHours()) + ":" + pad(date.getMinutes()) + ":" + pad(date.getSeconds());
+}
+
+function markPageUpdatedNow() {
+  const node = document.getElementById("page-updated-time");
+  if (node) node.textContent = formatClock(new Date());
+}
+
+function latestCheckedDate() {
+  const candidates = [SITE_DATA.generated_at, SITE_DATA.live_quotes_generated_at]
+    .filter(Boolean)
+    .map((iso) => new Date(iso))
+    .filter((d) => !isNaN(d.getTime()));
+  if (candidates.length === 0) return null;
+  return new Date(Math.max(...candidates.map((d) => d.getTime())));
+}
+
+function formatBuildCheckedTime() {
+  const date = latestCheckedDate();
+  return date ? formatClock(date) : null;
+}
+
+// ---- 價格與漲跌 -------------------------------------------------------
+
+function priceInfo(target) {
+  const price = target.latest.close;
+  let ref = target.latest.prev_close;
+  if ((ref === null || ref === undefined) && target.chart && target.chart.length > 1) {
+    ref = target.chart[target.chart.length - 2].close;
+  }
+  const abs = ref ? price - ref : null;
+  const pct = ref ? (abs / ref) * 100 : null;
+  return { price: price, ref: ref, abs: abs, pct: pct };
+}
+
+function changeNode(info) {
+  if (info.pct === null || info.pct === undefined) return el("span", { className: "chg flat", textContent: "—" });
+  const cls = info.pct > 0.005 ? "up" : info.pct < -0.005 ? "down" : "flat";
+  const arrow = info.pct > 0.005 ? "▲ +" : info.pct < -0.005 ? "▼ −" : "";
+  return el("span", { className: "chg " + cls, textContent: arrow + Math.abs(info.pct).toFixed(2) + "%" });
+}
+
+function quoteLine(target) {
+  const line = el("p", { className: "quote-line" });
+  if (target.passbook_quote) {
+    line.appendChild(
+      document.createTextNode(
+        "本行賣出價（你向銀行買進的價格）　掛牌時間 " + target.passbook_quote.listed_at + "，銀行牌價非即時行情"
+      )
+    );
+    return line;
+  }
+  if (target.latest.is_realtime) {
+    line.appendChild(el("span", { className: "live-dot" }));
+    let text = "盤中即時價 " + (target.latest.quote_time || "") + "，非官方公告價";
+    if (target.quote_delay_note) text += "（Yahoo 免費報價約延遲 10 分鐘）";
+    line.appendChild(document.createTextNode(text));
+  } else {
+    const checked = formatBuildCheckedTime();
+    line.appendChild(
+      document.createTextNode(
+        "最新收盤 " + target.latest.trading_date + "（非即時" + (checked ? "，" + checked + " 查核仍為最新" : "") + "）"
+      )
+    );
+  }
+  return line;
+}
+
+// ---- 標的總覽卡 -------------------------------------------------------
+
+function renderTargetTabs() {
+  const bar = document.getElementById("target-tabs");
+  bar.innerHTML = "";
+  orderedCodes().forEach((code) => {
+    const target = SITE_DATA.targets[code];
+    const info = priceInfo(target);
+    const btn = el("button", { className: "tcard", type: "button" });
+    btn.dataset.code = code;
+    btn.appendChild(el("div", { className: "tcard-name", textContent: shortName(target) + "　" + code }));
+    const row = el("div", { className: "tcard-row" });
+    row.appendChild(el("span", { className: "tcard-price", textContent: fmtPrice(info.price, target) }));
+    row.appendChild(changeNode(info));
+    btn.appendChild(row);
+    const ps = target.indicators.pullback_stage;
+    if (ps) {
+      const idx = stageIndex(ps.stage);
+      btn.appendChild(
+        el("span", { className: "chip" + (idx > 0 ? " warn" : ""), textContent: "階段：" + (STAGE_SHORT[idx] || ps.stage) })
+      );
+    }
+    btn.addEventListener("click", () => renderTarget(code));
+    bar.appendChild(btn);
+  });
+  updateTabActiveState();
+}
+
+function updateTabActiveState() {
+  document.querySelectorAll("#target-tabs .tcard").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.code === currentTargetCode);
+  });
+}
+
+// ---- 左欄：價格 + 現在該做什麼 --------------------------------------
+
+function stageSignalInfo(stage, signals) {
+  if (!signals) return null;
+  if (stage === STAGES[2]) return { label: "趨勢是否還沒壞（現價在月均線上且未破前低）", value: signals.trend_intact };
+  if (stage === STAGES[3]) return { label: "是否已經止跌（力道回升且沒再創新低）", value: signals.momentum_stabilizing };
+  if (stage === STAGES[4]) return { label: "是否重新轉強（MACD 黃金交叉）", value: signals.macd_golden_cross };
+  return null;
+}
+
+function signalChip(value) {
+  const text = value === true ? "✓ 符合" : value === false ? "✗ 尚未符合" : "資料不足";
+  const cls = value === true ? "chip ok" : value === false ? "chip warn" : "chip";
+  return el("span", { className: cls, textContent: text });
+}
+
+function renderActionCard(target) {
+  const card = el("div", { className: "panel" });
+  const label = el("div", { className: "hero-label" });
+  label.appendChild(document.createTextNode(target.display_name + "（" + target.code + "）"));
+  label.appendChild(el("span", { className: "chip", textContent: target.badge }));
+  card.appendChild(label);
+
+  const info = priceInfo(target);
+  const priceRow = el("div", { className: "hero-price" });
+  priceRow.appendChild(el("span", { className: "num", textContent: fmtPrice(info.price, target) }));
+  priceRow.appendChild(changeNode(info));
+  card.appendChild(priceRow);
+  card.appendChild(quoteLine(target));
+  if (target.passbook_quote) {
+    const pq = target.passbook_quote;
+    const quoteFacts = el("div", { className: "facts" });
+    const buyBox = el("div", { className: "fact" });
+    buyBox.appendChild(el("b", { textContent: fmtPrice(pq.buy, target) }));
+    buyBox.appendChild(el("span", { textContent: "本行買進價（你賣回銀行拿到的）" }));
+    quoteFacts.appendChild(buyBox);
+    const spreadBox = el("div", { className: "fact" });
+    spreadBox.appendChild(el("b", { textContent: fmtPrice(pq.spread, target) + " 元（" + ((pq.spread / pq.sell) * 100).toFixed(1) + "%）" }));
+    spreadBox.appendChild(el("span", { textContent: "買賣價差＝進出一趟的成本" }));
+    quoteFacts.appendChild(spreadBox);
+    card.appendChild(quoteFacts);
+  }
+  card.appendChild(el("div", { className: "divider" }));
+
+  card.appendChild(el("h2", { textContent: "現在該做什麼？" }));
+  const ps = target.indicators.pullback_stage;
+  if (!ps) {
+    card.appendChild(el("p", { className: "note", textContent: "資料不足，無法計算目前回檔幅度。" }));
+    return card;
+  }
+  const scale = target.pullback_scale || 1;
+  const idx = stageIndex(ps.stage);
+  const steps = el("div", { className: "steps" });
+  const stepLabels = el("div", { className: "step-labels" });
+  const names = ["觀察", "−" + 3 * scale + "%", "−" + 4 * scale + "%", "−" + 6 * scale + "%", "−" + 9 * scale + "%"];
+  names.forEach((name, i) => {
+    const cls = i < idx ? "step passed" : i === idx ? "step current" : "step";
+    steps.appendChild(el("div", { className: cls }));
+    stepLabels.appendChild(el("span", { className: i === idx ? "current" : "", textContent: name }));
+  });
+  card.appendChild(steps);
+  card.appendChild(stepLabels);
+  card.appendChild(
+    el("p", {
+      className: "stage-line",
+      textContent: "從 30 日高點回檔 " + fmt(ps.pullback_pct, 1) + "%　→　" + (STAGE_SHORT[idx] || ps.stage),
+    })
+  );
+  card.appendChild(el("p", { className: "stage-hint", textContent: ps.hint }));
+  const signalInfo = stageSignalInfo(ps.stage, target.indicators.stage_signals);
+  if (signalInfo) {
+    const row = el("div", { className: "signal-row" });
+    row.appendChild(document.createTextNode(signalInfo.label + "："));
+    row.appendChild(signalChip(signalInfo.value));
+    card.appendChild(row);
+  }
+  const facts = el("div", { className: "facts" });
+  const high = el("div", { className: "fact" });
+  high.appendChild(el("b", { textContent: fmtPrice(ps.recent_high, target) }));
+  high.appendChild(el("span", { textContent: "30 日高點（回檔起算點）" }));
+  facts.appendChild(high);
+  const pl = target.indicators.prior_low;
+  const broken = !pl && target.indicators.prior_low_broken === true;
+  const low = el("div", { className: "fact" + (broken ? " warn" : "") });
+  low.appendChild(el("b", { textContent: pl ? fmtPrice(pl.price, target) : broken ? "已跌破所有前低" : "資料不足" }));
+  low.appendChild(
+    el("span", {
+      textContent: pl
+        ? "起漲前低（" + pl.days_ago + " 天前），跌破代表轉弱"
+        : broken
+        ? "價格在近期最低點附近，沒有守住的前低，趨勢轉弱，先停止加碼"
+        : "起漲前低",
+    })
+  );
+  facts.appendChild(low);
+  card.appendChild(facts);
+  card.appendChild(el("p", { className: "note", style: "margin-top:8px", textContent: "階段依最近收盤價計算；回檔越深，分批買進的比例越高。僅供研究參考。" }));
+  return card;
+}
+
+// ---- 走勢圖 -----------------------------------------------------------
+
+function sparklinePath(points, width, height, padding, lo, hi) {
+  if (points.length === 0) return "";
+  const range = hi - lo || 1;
+  const stepX = (width - padding * 2) / Math.max(points.length - 1, 1);
+  return points
+    .map((p, i) => {
+      const x = padding + i * stepX;
+      const y = padding + (height - padding * 2) * (1 - (p.close - lo) / range);
+      return (i === 0 ? "M" : "L") + x.toFixed(1) + "," + y.toFixed(1);
+    })
+    .join(" ");
+}
+
+function renderSparkline(points, color, opts) {
+  opts = opts || {};
+  const width = 320;
+  const height = opts.height || 80;
+  const padding = 6;
+  const values = points.map((p) => p.close);
+  let lo = Math.min(...values);
+  let hi = Math.max(...values);
+  if (opts.high !== undefined && opts.high !== null) hi = Math.max(hi, opts.high);
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+  svg.setAttribute("preserveAspectRatio", "none");
+  svg.setAttribute("width", "100%");
+  svg.setAttribute("height", height);
+  svg.setAttribute("class", "spark");
+  const yOf = (v) => padding + (height - padding * 2) * (1 - (v - lo) / (hi - lo || 1));
+  if (opts.high !== undefined && opts.high !== null) {
+    const line = document.createElementNS(svgNS, "line");
+    line.setAttribute("x1", "0");
+    line.setAttribute("x2", String(width));
+    line.setAttribute("y1", yOf(opts.high).toFixed(1));
+    line.setAttribute("y2", yOf(opts.high).toFixed(1));
+    line.setAttribute("stroke", "#fabe00");
+    line.setAttribute("stroke-width", "1.5");
+    line.setAttribute("stroke-dasharray", "5 4");
+    line.setAttribute("vector-effect", "non-scaling-stroke");
+    svg.appendChild(line);
+  }
+  const pathEl = document.createElementNS(svgNS, "path");
+  pathEl.setAttribute("d", sparklinePath(points, width, height, padding, lo, hi));
+  pathEl.setAttribute("fill", "none");
+  pathEl.setAttribute("stroke", color);
+  pathEl.setAttribute("stroke-width", "2");
+  pathEl.setAttribute("vector-effect", "non-scaling-stroke");
+  svg.appendChild(pathEl);
+  return svg;
+}
+
+function renderChartCard(target) {
+  const card = el("div", { className: "panel" });
+  if (!target.chart || target.chart.length < 2) {
+    card.appendChild(el("h2", { textContent: "走勢" }));
+    card.appendChild(el("p", { className: "note", textContent: "資料不足，無法畫出走勢。" }));
+    return card;
+  }
+  const points = target.chart.slice(-60);
+  card.appendChild(el("h2", { textContent: "近 " + points.length + " 個交易日走勢" }));
+  const ps = target.indicators.pullback_stage;
+  card.appendChild(renderSparkline(points, "#da3700", { height: 110, high: ps ? ps.recent_high : null }));
+  const closes = points.map((p) => p.close);
+  const range = el("div", { className: "range-line" });
+  range.appendChild(el("span", { textContent: "最低 " + fmtPrice(Math.min(...closes), target) }));
+  range.appendChild(el("span", { textContent: "黃虛線＝30 日高點" }));
+  range.appendChild(el("span", { textContent: "最高 " + fmtPrice(Math.max(...closes), target) }));
+  card.appendChild(range);
+  return card;
+}
+
+// ---- 右欄：六個指標，每個一句白話 -----------------------------------
+
+function makeZoneBar(zones, pos) {
+  const wrap = el("div", { className: "zonewrap" });
+  const bar = el("div", { className: "zonebar" });
+  zones.forEach((z) => {
+    const part = el("div", { className: "zone " + z.cls });
+    part.style.width = z.w + "%";
+    bar.appendChild(part);
+  });
+  wrap.appendChild(bar);
+  if (pos !== null && pos !== undefined) {
+    const marker = el("div", { className: "zonemark" });
+    marker.style.left = (clamp(pos, 0, 1) * 100).toFixed(1) + "%";
+    wrap.appendChild(marker);
+  }
+  const labels = el("div", { className: "zonelabels" });
+  zones.forEach((z) => {
+    const span = el("span", { textContent: z.label });
+    span.style.width = z.w + "%";
+    labels.appendChild(span);
+  });
+  wrap.appendChild(labels);
+  return wrap;
+}
+
+function signed(value, digits) {
+  return (value >= 0 ? "+" : "−") + Math.abs(value).toFixed(digits);
+}
+
+function rsiSpec(target) {
+  const v = target.indicators.rsi14;
+  const spec = {
+    key: "rsi14",
+    title: "漲跌力道",
+    tag: "RSI14",
+    plain: "看最近 14 天是漲得多還是跌得多。數字越大越熱、越小越冷。",
+    zones: [
+      { w: 30, cls: "cold", label: "超賣 <30" },
+      { w: 40, cls: "mid", label: "中性" },
+      { w: 30, cls: "hot", label: "過熱 >70" },
+    ],
+  };
+  if (v === null || v === undefined) return Object.assign(spec, { value: "資料不足" });
+  spec.value = fmt(v, 0);
+  spec.pos = v / 100;
+  if (v >= 70) Object.assign(spec, { tone: "hot", verdict: "過熱：短線漲太多，追高風險大" });
+  else if (v <= 30) Object.assign(spec, { tone: "cold", verdict: "超賣：短線跌太多，可能接近低檔" });
+  else if (v >= 50) spec.verdict = "偏強：近期漲得比跌得多";
+  else spec.verdict = "偏弱：近期跌得比漲得多";
+  return spec;
+}
+
+function ma20Spec(target) {
+  const ma = target.indicators.ma20;
+  const price = target.latest.close;
+  const spec = {
+    key: "ma20",
+    title: "中期趨勢",
+    tag: "MA20 月均線",
+    plain: "最近 20 天的平均價，當作中期走勢的基準線。現價在上方＝偏多，在下方＝偏弱。",
+    zones: [
+      { w: 50, cls: "cold", label: "均線之下" },
+      { w: 50, cls: "hot", label: "均線之上" },
+    ],
+  };
+  if (ma === null || ma === undefined || !price) return Object.assign(spec, { value: "資料不足" });
+  const dev = ((price - ma) / ma) * 100;
+  spec.value = fmtPrice(ma, target);
+  spec.sub = "現價 " + fmtPrice(price, target);
+  spec.pos = (clamp(dev, -5, 5) + 5) / 10;
+  if (dev >= 0) Object.assign(spec, { tone: "hot", verdict: "現價在均線之上 " + signed(dev, 1) + "%：中期偏多" });
+  else Object.assign(spec, { tone: "cold", verdict: "現價在均線之下 " + signed(dev, 1) + "%：中期偏弱" });
+  return spec;
+}
+
+function bollingerSpec(target) {
+  const b = target.indicators.bollinger;
+  const price = target.latest.close;
+  const spec = {
+    key: "bollinger",
+    title: "價格貴不貴",
+    tag: "布林通道",
+    plain: "用近 20 天畫出「正常波動範圍」。越靠近上緣越貴、越靠近下緣越便宜。",
+    zones: [
+      { w: 20, cls: "cold", label: "近下緣" },
+      { w: 60, cls: "mid", label: "正常範圍" },
+      { w: 20, cls: "hot", label: "近上緣" },
+    ],
+  };
+  if (!b || b.upper === null || b.lower === null || b.upper === b.lower || !price) {
+    return Object.assign(spec, { value: "資料不足" });
+  }
+  const pct = ((price - b.lower) / (b.upper - b.lower)) * 100;
+  spec.value = Math.round(pct) + "%";
+  spec.sub = "通道 " + fmtPrice(b.lower, target) + " ~ " + fmtPrice(b.upper, target);
+  spec.pos = pct / 100;
+  if (pct >= 100) Object.assign(spec, { tone: "hot", verdict: "衝出上緣：短線偏貴" });
+  else if (pct > 80) Object.assign(spec, { tone: "hot", verdict: "貼近上緣：偏貴，容易回落" });
+  else if (pct < 0) Object.assign(spec, { tone: "cold", verdict: "跌出下緣：偏便宜，但可能還在殺" });
+  else if (pct < 20) Object.assign(spec, { tone: "cold", verdict: "貼近下緣：偏便宜" });
+  else spec.verdict = "在正常波動範圍內";
+  return spec;
+}
+
+function macdSpec(target) {
+  const m = target.indicators.macd;
+  const price = target.latest.close;
+  const spec = {
+    key: "macd",
+    title: "漲跌動能",
+    tag: "MACD",
+    plain: "比較短期與長期走勢的差距。快線在慢線之上＝動能偏多，之下＝偏空。",
+    zones: [
+      { w: 50, cls: "cold", label: "動能偏空" },
+      { w: 50, cls: "hot", label: "動能偏多" },
+    ],
+  };
+  if (!m || m.macd === null || m.macd === undefined || !price) {
+    return Object.assign(spec, { value: "資料不足" });
+  }
+  const digits = Math.abs(m.macd) < 1 ? 3 : 2;
+  const signals = target.indicators.stage_signals;
+  spec.value = signed(m.macd, digits);
+  // 訊號線需要比 MACD 本身多 9 天資料；還算不出來時，只用 MACD 的正負判斷短期是否強過長期。
+  const hasSignal = m.signal !== null && m.signal !== undefined;
+  const hist = hasSignal ? (m.histogram !== null && m.histogram !== undefined ? m.histogram : m.macd - m.signal) : m.macd;
+  if (hasSignal) spec.sub = "訊號線 " + signed(m.signal, digits);
+  spec.pos = 0.5 + clamp(hist / (price * 0.005), -1, 1) * 0.5;
+  if (hist > 0) {
+    spec.tone = "hot";
+    spec.verdict = hasSignal
+      ? "快線在慢線之上：動能偏多" + (signals && signals.macd_golden_cross === true ? "（剛黃金交叉）" : "")
+      : "短期走勢強過長期：動能偏多";
+  } else {
+    spec.tone = "cold";
+    spec.verdict = hasSignal ? "快線在慢線之下：動能偏空" : "短期走勢弱於長期：動能偏空";
+  }
+  return spec;
+}
+
+function positionSpec(target) {
+  const rp = target.indicators.relative_position;
+  const spec = {
+    key: "relative_position",
+    title: "30 天位置",
+    tag: "區間位置",
+    plain: "現價落在近 30 天最低到最高之間的哪裡。0% 是最低、100% 是最高。",
+    zones: [
+      { w: 20, cls: "cold", label: "低點區" },
+      { w: 60, cls: "mid", label: "中段" },
+      { w: 20, cls: "hot", label: "高點區" },
+    ],
+  };
+  if (!rp) return Object.assign(spec, { value: "資料不足" });
+  spec.value = fmt(rp.position * 100, 0) + "%";
+  spec.pos = rp.position;
+  if (rp.position > 0.8) Object.assign(spec, { tone: "hot", verdict: "接近 30 天最高點：相對偏貴，別追高" });
+  else if (rp.position < 0.2) Object.assign(spec, { tone: "cold", verdict: "接近 30 天最低點：相對便宜" });
+  else spec.verdict = "在 30 天區間的中段";
+  return spec;
+}
+
+function squeezeSpec(target) {
+  const vs = target.indicators.volatility_squeeze;
+  const spec = {
+    key: "volatility_squeeze",
+    title: "最近安不安靜",
+    tag: "波動壓縮比",
+    plain: "最近 5 天的波動 ÷ 近 20 天的波動。越小越安靜，越大越劇烈。",
+    zones: [
+      { w: 25, cls: "cold", label: "壓縮 <0.5" },
+      { w: 35, cls: "mid", label: "正常" },
+      { w: 40, cls: "hot", label: "放大 >1.2" },
+    ],
+  };
+  if (!vs || vs.ratio === null || vs.ratio === undefined) return Object.assign(spec, { value: "資料不足" });
+  spec.value = fmt(vs.ratio, 2);
+  spec.pos = vs.ratio / 2;
+  if (vs.ratio < 0.5) Object.assign(spec, { tone: "cold", verdict: "很安靜：常是變盤前兆（方向不一定）" });
+  else if (vs.ratio > 1.2) Object.assign(spec, { tone: "hot", verdict: "波動變大：行情在加速" });
+  else spec.verdict = "波動正常";
+  return spec;
+}
+
+function renderIndicatorCard(spec) {
+  const card = el("div", { className: "ind" });
+  const head = el("div", { className: "ind-head" });
+  const name = el("div", { className: "ind-name", textContent: spec.title });
+  name.appendChild(el("small", { textContent: spec.tag }));
+  head.appendChild(name);
+  const valueBox = el("div", {});
+  valueBox.appendChild(el("div", { className: "ind-value", textContent: spec.value }));
+  if (spec.sub) valueBox.appendChild(el("div", { className: "ind-sub", textContent: spec.sub }));
+  head.appendChild(valueBox);
+  card.appendChild(head);
+  if (spec.pos !== undefined) card.appendChild(makeZoneBar(spec.zones, spec.pos));
+  if (spec.verdict) card.appendChild(el("p", { className: "verdict " + (spec.tone || ""), textContent: spec.verdict }));
+  card.appendChild(el("p", { className: "plain", textContent: spec.plain }));
+  return card;
+}
+
+function renderIndicatorSection(target) {
+  const section = el("div", {});
+  const head = el("div", { className: "section-head" });
+  head.appendChild(el("h2", { textContent: "六個指標，一句話看懂" }));
+  const legend = el("div", { className: "legend" });
+  [["#b8c7d6", "偏冷（價格偏低）"], ["#e9e2d9", "正常"], ["#f2a58a", "偏熱（價格偏高）"]].forEach((item) => {
+    const span = el("span", {});
+    const swatch = el("i", {});
+    swatch.style.background = item[0];
+    span.appendChild(swatch);
+    span.appendChild(document.createTextNode(item[1]));
+    legend.appendChild(span);
+  });
+  head.appendChild(legend);
+  section.appendChild(head);
+  const grid = el("div", { className: "ind-grid" });
+  [rsiSpec, ma20Spec, bollingerSpec, macdSpec, positionSpec, squeezeSpec].forEach((build) => {
+    grid.appendChild(renderIndicatorCard(build(target)));
+  });
+  section.appendChild(grid);
+  return section;
+}
+
+// ---- 下排：綜合分數、AI、美元 ----------------------------------------
+
+function renderTechnicalScore(target) {
+  const ts = target.indicators.technical_score;
+  const card = el("div", { className: "panel" });
+  card.appendChild(el("h2", { textContent: "綜合冷熱分數" }));
+  if (!ts) {
+    card.appendChild(el("p", { className: "note", textContent: "資料不足，無法計算。" }));
+    return card;
+  }
+  const big = el("div", { className: "score-big" });
+  big.appendChild(el("span", { className: "verdict " + (ts.composite >= 65 ? "cold" : ts.composite < 35 ? "hot" : ""), textContent: ts.label }));
+  const num = el("span", { className: "num", textContent: fmt(ts.composite, 0) });
+  num.appendChild(el("small", { textContent: " 分" }));
+  big.appendChild(num);
+  card.appendChild(big);
+  card.appendChild(
+    makeZoneBar(
+      [
+        { w: 35, cls: "cold", label: "偏冷（高分）" },
+        { w: 30, cls: "mid", label: "中性" },
+        { w: 35, cls: "hot", label: "偏熱（低分）" },
+      ],
+      1 - ts.composite / 100
+    )
+  );
+  const chips = el("div", { className: "score-chips" });
+  Object.keys(ts.scores).forEach((key) => {
+    chips.appendChild(el("span", { className: "chip", textContent: (SCORE_ITEM_LABELS[key] || key) + " " + fmt(ts.scores[key], 0) }));
+  });
+  card.appendChild(chips);
+  card.appendChild(
+    el("p", {
+      className: "note",
+      style: "margin-top:8px",
+      textContent: "把 RSI、布林、MA20、MACD 換成 0–100 分再平均：分數越高＝價格越在低檔（偏冷），越低＝越在高檔（偏熱）。僅供研究參考，不是進出場訊號。",
+    })
+  );
+  return card;
+}
+
+function renderAiSummary(target) {
+  const card = el("div", { className: "panel" });
+  card.appendChild(el("h2", { textContent: "AI 推測：今天可能的漲跌原因" }));
+  const summary = target.ai_summary;
+  if (!summary) {
+    card.appendChild(el("p", { className: "note", textContent: "今日摘要暫時無法產生，系統會在下次更新時自動重試。" }));
+    return card;
+  }
+  card.appendChild(el("p", { className: "ai-text", textContent: summary.text }));
+  const stale = summary.generated_date && summary.generated_date !== todayIso();
+  const dateNote = summary.generated_date ? "（產生日 " + summary.generated_date + (stale ? "，今日新摘要尚未產生" : "") + "）" : "";
+  card.appendChild(el("p", { className: "note", style: "margin-top:6px", textContent: summary.disclaimer + dateNote }));
+  return card;
+}
+
+function todayIso() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+}
+
+function renderMacroCard() {
+  const macro = SITE_DATA.macro_context;
+  const card = el("div", { className: "panel" });
+  card.appendChild(el("h2", { textContent: "美元與金價的關係" }));
+  const fxPoints = macro.usdtwd;
+  if (fxPoints.length > 0) {
+    const latestFx = fxPoints[fxPoints.length - 1];
+    const prevFx = fxPoints.length > 1 ? fxPoints[fxPoints.length - 2] : null;
+    const big = el("div", { className: "macro-big" });
+    big.appendChild(el("span", { className: "num", textContent: fmt(latestFx.close, 3) }));
+    if (prevFx) {
+      const diff = ((latestFx.close - prevFx.close) / prevFx.close) * 100;
+      big.appendChild(el("span", { className: "chg flat", textContent: (diff >= 0 ? "▲ +" : "▼ −") + Math.abs(diff).toFixed(2) + "%" }));
+    }
+    big.appendChild(el("span", { className: "note", textContent: "美元兌台幣" }));
+    card.appendChild(big);
+    if (fxPoints.length > 1) card.appendChild(renderSparkline(fxPoints, "#73625c", { height: 54 }));
+  }
+  const div = macro.divergence;
+  if (div && div.checked_days > 0) {
+    const row = el("p", { style: "margin-top:6px" });
+    row.appendChild(el("span", { className: div.is_divergent ? "chip warn" : "chip ok", textContent: div.is_divergent ? "⚠ 金價與美元同向，不尋常" : "正常反向關係" }));
+    card.appendChild(row);
+    card.appendChild(
+      el("p", {
+        className: "note",
+        style: "margin-top:6px",
+        textContent: "通常美元走弱、金價偏強（兩者反向）。近 " + div.checked_days + " 個有效交易日中，有 " + div.same_direction_days + " 天兩者同向。",
+      })
+    );
+  }
+  if (macro.stale) {
+    card.appendChild(el("p", { className: "note", style: "margin-top:6px", textContent: "⚠ 資料暫時無法取得，顯示上次成功抓取的結果。" }));
+  }
+  return card;
+}
+
+// ---- 收合區：交易紀律、存摺試算、標的說明 --------------------------
+
+function disciplineRules(scale) {
+  const t1 = 3 * scale, t2 = 4 * scale, t3 = 6 * scale, t4 = 9 * scale;
+  return [
+    "只做中期多頭的黃金。",
+    "不在暴漲創高時追價。",
+    "回檔 " + t1 + "～" + t2 + "% 開始第一筆 20%。",
+    "回檔 " + t2 + "～" + t3 + "%，趨勢沒壞（收盤價在 MA20 之上且未跌破起漲前低）再加 20%。",
+    t3 + "～" + t4 + "% 區間出現止跌（RSI14 比 3 天前回升且未創近 3 天新低），再加 20%。",
+    "最後 40% 一定等重新轉強（MACD 出現黃金交叉）。",
+    "跌破重要前低（起漲低點），立即停止加碼。",
+    "不要無限攤平。",
+    "+5%、+8%、+10～12% 分批獲利。",
+    "剩餘 40% 讓趨勢決定出場。",
+  ];
+}
+
+function makeFold(id, title, body) {
+  const fold = el("details", { className: "fold" });
+  fold.open = !!foldState[id];
+  fold.addEventListener("toggle", () => {
+    foldState[id] = fold.open;
+  });
+  fold.appendChild(el("summary", { textContent: title }));
+  body.classList.add("fold-body");
+  fold.appendChild(body);
+  return fold;
+}
+
+function renderDisciplineCard(target) {
+  const body = el("div", {});
+  const scale = target.pullback_scale || 1;
+  if (scale !== 1) {
+    body.appendChild(el("p", { className: "note", textContent: "此標的為 " + scale + " 倍槓桿，回檔門檻已按 " + scale + " 倍幅度計算，跟現貨標的不是同一組數字。" }));
+  }
+  const list = el("ul", { className: "rule-list" });
+  disciplineRules(scale).forEach((rule) => list.appendChild(el("li", { textContent: rule })));
+  body.appendChild(list);
+  body.appendChild(
+    el("p", { className: "note", textContent: "回檔基準為近 30 天高點；趨勢是否轉強、止跌、跌破前低仍需自行判斷，本站不做自動買賣訊號。獲利分批需要你自己記錄進場價才能對照，本站不追蹤持倉。" })
+  );
+  return makeFold("discipline", "分批進出場紀律（個人參考，非自動訊號）", body);
+}
+
+function renderAboutFold(target) {
+  const body = el("div", {});
+  body.appendChild(el("p", { textContent: target.asset_class_note }));
+  return makeFold("about", "這個標的是什麼？", body);
+}
+
+function renderFolds(target) {
+  const wrap = el("div", {});
+  wrap.appendChild(renderDisciplineCard(target));
+  wrap.appendChild(renderAboutFold(target));
+  wrap.appendChild(
+    el("p", {
+      className: "footer-note",
+      textContent:
+        "資料來源：" + target.data_source.name + "（最後更新 " + target.data_source.as_of + "）；總體背景：" + SITE_DATA.macro_context.data_source.name + "（" + SITE_DATA.macro_context.data_source.as_of + "）。" + SITE_DATA.macro_context.note,
+    })
+  );
+  return wrap;
+}
+
+// ---- 組版 ------------------------------------------------------------
+
+function renderTarget(code) {
+  currentTargetCode = code;
+  const target = SITE_DATA.targets[code];
+  const view = document.getElementById("target-view");
+  view.innerHTML = "";
+  const main = el("div", { className: "main" });
+  const left = el("div", { className: "stack" });
+  left.appendChild(renderActionCard(target));
+  left.appendChild(renderChartCard(target));
+  main.appendChild(left);
+  main.appendChild(renderIndicatorSection(target));
+  view.appendChild(main);
+  const rowB = el("div", { className: "row-b" });
+  rowB.appendChild(renderTechnicalScore(target));
+  rowB.appendChild(renderAiSummary(target));
+  rowB.appendChild(renderMacroCard());
+  view.appendChild(rowB);
+  view.appendChild(renderFolds(target));
+  updateTabActiveState();
+}
+
+function refreshSiteData() {
+  fetch("data/gold_site.json?ts=" + Date.now())
+    .then((res) => (res.ok ? res.json() : null))
+    .then((fresh) => {
+      if (!fresh) return;
+      Object.assign(SITE_DATA, fresh);
+      renderDisclaimer();
+      renderTargetTabs();
+      renderTarget(currentTargetCode || orderedCodes()[0]);
+      markPageUpdatedNow();
+    })
+    .catch(() => {});
+}
+
+// 報價優先向 Cloudflare Worker 即時取得（不受 GitHub Actions 排程延遲影響）；
+// Worker 連不上、或兩個資料來源都沒資料時，退回建站時一併發布的靜態 JSON。
+function fetchLiveQuotes() {
+  const fetchStatic = () =>
+    fetch("data/live_quotes.json?ts=" + Date.now()).then((res) => (res.ok ? res.json() : null));
+  if (!SITE_DATA.live_quotes_url) return fetchStatic();
+  return fetch(SITE_DATA.live_quotes_url + "?ts=" + Date.now())
+    .then((res) => (res.ok ? res.json() : null))
+    .then((fresh) => (fresh && fresh.quotes && Object.keys(fresh.quotes).length ? fresh : fetchStatic()))
+    .catch(fetchStatic);
+}
+
+function refreshLiveQuotes() {
+  fetchLiveQuotes()
+    .then((fresh) => {
+      if (!fresh) return;
+      SITE_DATA.live_quotes_generated_at = fresh.generated_at;
+      if (fresh.quotes) {
+        Object.keys(fresh.quotes).forEach((code) => {
+          const target = SITE_DATA.targets[code];
+          if (target) Object.assign(target.latest, fresh.quotes[code]);
+        });
+      }
+      // 就算這次沒有任何標的的報價值真的變，查核時間本身也是新的，
+      // 一律重繪，讓「查核仍為最新」的時間跟著這次輪詢往前走。
+      renderTargetTabs();
+      if (currentTargetCode) renderTarget(currentTargetCode);
+      markPageUpdatedNow();
+    })
+    .catch(() => {});
+}
+
+renderDisclaimer();
+currentTargetCode = orderedCodes()[0];
+renderTargetTabs();
+renderTarget(currentTargetCode);
+markPageUpdatedNow();
+if (SITE_DATA.auto_refresh_seconds) {
+  setInterval(refreshSiteData, SITE_DATA.auto_refresh_seconds * 1000);
+}
+if (SITE_DATA.live_refresh_seconds) {
+  setInterval(refreshLiveQuotes, SITE_DATA.live_refresh_seconds * 1000);
+}
+</script>
+</body>
+</html>

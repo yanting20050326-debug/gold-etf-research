@@ -1,11 +1,10 @@
 import json
 from datetime import UTC, datetime, timedelta
 
-import pytest
-
 from gold_research import build_site as build_site_module
 from gold_research.build_site import build_payload, render_html
 from gold_research.fetch_macro import LatestQuote, MacroSeries, PricePoint
+from gold_research.fetch_tbb_gold import PassbookDay, PassbookQuote, TbbGoldFetchError
 from gold_research.fetch_twse import DailyBar, RealtimeQuote, TwseFetchError
 
 
@@ -127,52 +126,183 @@ def test_build_payload_includes_multiple_twse_targets_and_intl_gold():
     # window; it's expected to be None, not the schema key being missing.
     assert "relative_position" in intl_gold["indicators"]
     assert intl_gold["latest"]["close"] == macro_gold.points[-1].close
-    # Same 6-point shortage applies to the passbook estimate's own indicators,
-    # but a latest converted price should still be available.
-    passbook = intl_gold["passbook"]
-    assert passbook["relative_position"] is None
-    assert passbook["pullback_stage"] is None
-    expected_latest = (
-        macro_gold.points[-1].close * macro_fx.points[-1].close / 31.1034768
-    )
-    assert passbook["latest_price"] == pytest.approx(expected_latest)
-    assert passbook["note"]
+    # 換算出來的「試算」存摺價已移除，改用台企銀真實牌價（TBBGOLD 標的）。
+    assert "passbook" not in intl_gold
 
 
-def test_intl_gold_passbook_estimate_computed_from_ntd_converted_series():
-    dates = [f"2026-08-{d:02d}" for d in range(1, 32)] + [
-        f"2026-09-{d:02d}" for d in range(1, 6)
+def _tbb_series(n: int = 40, start: float = 4000.0) -> list[tuple[str, float]]:
+    first = datetime(2026, 7, 1, tzinfo=UTC)
+    return [
+        ((first + timedelta(days=i)).strftime("%Y-%m-%d"), start + i * 2.0)
+        for i in range(n)
     ]
-    gold_closes = [2000.0 + i for i in range(len(dates))]  # steadily rising
-    fx_closes = [31.0] * len(dates)  # flat FX, so USD trend passes through
-    macro_gold = MacroSeries(
-        symbol="GC=F",
-        points=[PricePoint(d, c) for d, c in zip(dates, gold_closes)],
-        as_of=dates[-1],
-        stale=False,
+
+
+def _tbb_quote(series, sell=4100.0, buy=4054.0, same_day=True) -> PassbookQuote:
+    last_date = series[-1][0]
+    if not same_day:
+        last_date = (
+            datetime.strptime(last_date, "%Y-%m-%d").replace(tzinfo=UTC)
+            + timedelta(days=1)
+        ).strftime("%Y-%m-%d")
+    return PassbookQuote(
+        sell=sell, buy=buy, listed_date=last_date, listed_time="10:08:37"
     )
-    macro_fx = MacroSeries(
-        symbol="USDTWD=X",
-        points=[PricePoint(d, c) for d, c in zip(dates, fx_closes)],
-        as_of=dates[-1],
-        stale=False,
-    )
+
+
+def test_build_payload_adds_tbb_passbook_target_using_sell_price(tmp_path):
+    macro_gold, macro_fx = _sample_macro()
+    series = _tbb_series()
+    quote = _tbb_quote(series)
     payload = build_payload(
         {"00635U": _sample_bars()},
         macro_gold,
         macro_fx,
-        datetime(2026, 9, 5, tzinfo=UTC),
+        datetime(2026, 8, 20, tzinfo=UTC),
+        cache_dir=tmp_path,
+        tbb_series=series,
+        tbb_quote=quote,
     )
-    passbook = payload["targets"]["GCF"]["passbook"]
-    expected_latest = gold_closes[-1] * fx_closes[-1] / 31.1034768
-    assert passbook["latest_price"] == pytest.approx(expected_latest)
-    assert passbook["unit"] == "NT$/公克（試算）"
-    # Flat FX and a steadily rising USD gold price mean the NTD series is also
-    # steadily rising, so today's close should sit at the top of its own
-    # 30-day range regardless of the ounce-to-gram scaling.
-    assert passbook["relative_position"]["position"] == pytest.approx(1.0)
-    assert passbook["pullback_stage"]["pullback_pct"] == pytest.approx(0.0)
-    assert passbook["technical_score"] is not None
+    tbb = payload["targets"]["TBBGOLD"]
+    assert tbb["display_name"] == "台企銀黃金存摺"
+    assert tbb["price_digits"] == 0
+    # 價格、回檔高點、指標都以「賣出價」序列為準；當日牌價覆蓋最後一天。
+    assert tbb["latest"]["close"] == quote.sell
+    assert tbb["latest"]["prev_close"] == series[-2][1]
+    assert tbb["latest"]["is_realtime"] is False
+    assert tbb["chart"][-1] == {"trading_date": series[-1][0], "close": quote.sell}
+    assert len(tbb["chart"]) == len(series)
+    assert tbb["indicators"]["pullback_stage"]["recent_high"] == quote.sell
+    assert tbb["data_source"]["as_of"] == series[-1][0]
+    assert tbb["passbook_quote"] == {
+        "sell": 4100.0,
+        "buy": 4054.0,
+        "spread": 46.0,
+        "listed_at": f"{series[-1][0]} 10:08:37",
+    }
+
+
+def test_tbb_target_omitted_when_series_missing_or_too_short(tmp_path):
+    macro_gold, macro_fx = _sample_macro()
+    common = {"cache_dir": tmp_path}
+    no_series = build_payload(
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
+        **common,
+    )
+    short = build_payload(
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
+        tbb_series=_tbb_series(10),
+        **common,
+    )
+    assert "TBBGOLD" not in no_series["targets"]
+    assert "TBBGOLD" not in short["targets"]
+
+
+def test_tbb_target_without_quote_has_no_passbook_quote(tmp_path):
+    macro_gold, macro_fx = _sample_macro()
+    payload = build_payload(
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
+        cache_dir=tmp_path,
+        tbb_series=_tbb_series(),
+    )
+    assert "passbook_quote" not in payload["targets"]["TBBGOLD"]
+
+
+def test_apply_quote_to_series_replaces_same_day_and_appends_new_day():
+    series = _tbb_series(5)
+    same = build_site_module.apply_quote_to_series(
+        series, _tbb_quote(series, sell=9999.0)
+    )
+    assert same[:-1] == series[:-1]
+    assert same[-1] == (series[-1][0], 9999.0)
+
+    nxt_quote = _tbb_quote(series, sell=5000.0, same_day=False)
+    appended = build_site_module.apply_quote_to_series(series, nxt_quote)
+    assert len(appended) == len(series) + 1
+    assert appended[-1] == (nxt_quote.listed_date, 5000.0)
+
+    stale = PassbookQuote(
+        sell=1.0, buy=1.0, listed_date="2000-01-01", listed_time="09:00:00"
+    )
+    assert build_site_module.apply_quote_to_series(series, stale) == series
+    assert build_site_module.apply_quote_to_series(series, None) == series
+
+
+def _published_tbb(series) -> dict:
+    return {"chart": [{"trading_date": d, "close": c} for d, c in series]}
+
+
+def test_resolve_tbb_inputs_reuses_published_history_when_it_covers_today():
+    series = _tbb_series()
+    quote = _tbb_quote(series)
+
+    def history_must_not_be_called():
+        raise AssertionError("已發布的歷史涵蓋今天，不該再抓歷史牌價")
+
+    result, got_quote = build_site_module.resolve_tbb_inputs(
+        _published_tbb(series),
+        fetch_quote=lambda: quote,
+        fetch_history_days=history_must_not_be_called,
+    )
+    assert result == series
+    assert got_quote == quote
+
+
+def test_resolve_tbb_inputs_fetches_history_on_a_new_day():
+    series = _tbb_series()
+    quote = _tbb_quote(series, same_day=False)
+    days = [PassbookDay(trading_date=d, buy=c - 46, sell=c) for d, c in series] + [
+        PassbookDay(trading_date=quote.listed_date, buy=quote.buy, sell=quote.sell)
+    ]
+    result, _ = build_site_module.resolve_tbb_inputs(
+        _published_tbb(series),
+        fetch_quote=lambda: quote,
+        fetch_history_days=lambda: days,
+    )
+    assert result[-1] == (quote.listed_date, quote.sell)
+    assert len(result) == len(series) + 1
+
+
+def test_resolve_tbb_inputs_survives_failures():
+    series = _tbb_series()
+
+    def quote_fails():
+        raise TbbGoldFetchError("down")
+
+    def history_fails():
+        raise TbbGoldFetchError("down")
+
+    # 當日牌價抓不到：沿用已發布的序列，不丟例外。
+    result, quote = build_site_module.resolve_tbb_inputs(
+        _published_tbb(series),
+        fetch_quote=quote_fails,
+        fetch_history_days=history_fails,
+    )
+    assert result == series and quote is None
+
+    # 第一次執行、什麼都沒有、歷史又抓不到：回 None，由呼叫端略過這個標的。
+    result, quote = build_site_module.resolve_tbb_inputs(
+        None, fetch_quote=quote_fails, fetch_history_days=history_fails
+    )
+    assert result is None and quote is None
+
+    # 歷史抓不到但有舊序列：沿用舊序列。
+    new_day = _tbb_quote(series, same_day=False)
+    result, _ = build_site_module.resolve_tbb_inputs(
+        _published_tbb(series),
+        fetch_quote=lambda: new_day,
+        fetch_history_days=history_fails,
+    )
+    assert result == series
 
 
 def test_build_payload_flags_stale_macro_context():
@@ -237,7 +367,8 @@ def test_render_html_includes_price_charts():
     # constant containing the word would make this test pass even if the
     # actual rendering calls were deleted. Asserting the exact call-site
     # source text is immune to that.
-    assert "renderSparkline(target.chart" in html
+    assert "target.chart.slice(-60)" in html
+    assert "renderSparkline(points" in html
     assert "renderSparkline(fxPoints" in html
 
 
@@ -251,8 +382,8 @@ def test_render_html_includes_new_indicator_cards_and_divergence():
     )
     html = render_html(payload)
 
-    assert 'indicatorCard("volatility_squeeze"' in html
-    assert 'indicatorCard("relative_position"' in html
+    assert 'key: "volatility_squeeze"' in html
+    assert 'key: "relative_position"' in html
     assert "macro.divergence" in html
 
 
@@ -271,12 +402,19 @@ def test_render_html_shows_all_six_indicators_together():
     )
     html = render_html(payload)
 
-    assert 'indicatorCard("rsi14"' in html
-    assert 'indicatorCard("bollinger"' in html
-    assert 'indicatorCard("volatility_squeeze"' in html
-    assert 'indicatorCard("relative_position"' in html
-    assert 'indicatorCard("ma20"' in html
-    assert 'indicatorCard("macd"' in html
+    for key in (
+        "rsi14",
+        "bollinger",
+        "volatility_squeeze",
+        "relative_position",
+        "ma20",
+        "macd",
+    ):
+        assert f'key: "{key}"' in html
+    # 每個指標都要有一句白話說明，且用色帶標出「數字大小落在哪一區」。
+    assert html.count("plain:") >= 6
+    assert "renderIndicatorCard(spec)" in html
+    assert "makeZoneBar(spec.zones, spec.pos)" in html
     # The old horizon-tab mechanism should be gone entirely, not just unused.
     assert "renderHorizonTabs" not in html
     assert "currentHorizon" not in html
@@ -326,8 +464,8 @@ def test_render_html_includes_discipline_card():
     assert "disciplineRules(scale)" in html
     assert "開始第一筆 20%。" in html
     assert "不要無限攤平" in html
-    assert "buy-hint" in html
-    assert '"提示：" + ps.hint' in html
+    assert "ps.hint" in html
+    assert "現在該做什麼？" in html
 
 
 def test_render_html_includes_position_gauge_and_auto_refresh():
@@ -340,8 +478,8 @@ def test_render_html_includes_position_gauge_and_auto_refresh():
     )
     html = render_html(payload)
 
-    assert "renderPositionGauge(rp)" in html
-    assert "gauge-track" in html
+    assert "makeZoneBar(" in html
+    assert "zonemark" in html
     assert "refreshSiteData" in html
     assert "SITE_DATA.auto_refresh_seconds" in html
     assert "refreshLiveQuotes" in html
@@ -391,6 +529,106 @@ def test_build_payload_uses_realtime_quote_when_available():
     assert latest["quote_time"] == "13:25:00"
 
 
+def test_latest_prev_close_comes_from_twse_previous_close_when_realtime():
+    macro_gold, macro_fx = _sample_macro()
+    realtime = RealtimeQuote(
+        code="00635U",
+        price=49.5,
+        previous_close=49.0,
+        quote_date="20260820",
+        quote_time="10:00:00",
+    )
+    payload = build_payload(
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
+        twse_realtime={"00635U": realtime},
+    )
+    assert payload["targets"]["00635U"]["latest"]["prev_close"] == 49.0
+
+
+def test_latest_prev_close_falls_back_to_previous_daily_bar():
+    macro_gold, macro_fx = _sample_macro()
+    bars = _sample_bars()
+    payload = build_payload(
+        {"00635U": bars},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
+    )
+    assert payload["targets"]["00635U"]["latest"]["prev_close"] == bars[-2].close
+    gcf = payload["targets"]["GCF"]
+    assert gcf["latest"]["prev_close"] == macro_gold.points[-2].close
+
+
+def test_ai_summary_field_carries_generated_date(tmp_path):
+    cache = tmp_path / "ai_summary_00635U.json"
+    cache.write_text(
+        json.dumps({"text": "快取的摘要", "generated_date": "2026-08-20"}),
+        encoding="utf-8",
+    )
+    macro_gold, macro_fx = _sample_macro()
+    payload = build_payload(
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
+        cache_dir=tmp_path,
+    )
+    summary = payload["targets"]["00635U"]["ai_summary"]
+    assert summary["text"] == "快取的摘要"
+    assert summary["generated_date"] == "2026-08-20"
+
+
+def test_prior_low_broken_means_trend_is_not_intact_rather_than_unknown():
+    # 一路創新低：過去的每個低點都被後面的收盤價跌破，所以找不到有效前低。
+    # 這要標成「已跌破」，趨勢沒壞必須是 False，不能是「資料不足」(None)。
+    closes: list[float] = []
+    low = 100.0
+    for _ in range(6):  # 每一波低點都比上一波低，結尾再跌破最近一個低點
+        closes += [low + 6, low + 4, low + 2, low, low + 2, low + 4]
+        low -= 4
+    closes += [low + 2, low + 1, low]
+    start = datetime(2026, 7, 1, tzinfo=UTC)
+    bars = [
+        DailyBar(
+            trading_date=(start + timedelta(days=i)).strftime("%Y-%m-%d"),
+            open=c,
+            high=c,
+            low=c,
+            close=c,
+            volume=1_000,
+        )
+        for i, c in enumerate(closes)
+    ]
+    macro_gold, macro_fx = _sample_macro()
+    payload = build_payload(
+        {"00635U": bars}, macro_gold, macro_fx, datetime(2026, 8, 20, tzinfo=UTC)
+    )
+    ind = payload["targets"]["00635U"]["indicators"]
+    assert ind["prior_low"] is None
+    assert ind["prior_low_broken"] is True
+    assert ind["stage_signals"]["trend_intact"] is False
+
+
+def test_prior_low_broken_is_false_in_an_uptrend():
+    # 一路墊高的行情：低點沒有被跌破，不能顯示「已跌破所有前低」。
+    macro_gold, macro_fx = _sample_macro()
+    payload = build_payload(
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
+    )
+    assert payload["targets"]["00635U"]["indicators"]["prior_low_broken"] is False
+
+
+def test_dashboard_template_file_exists_and_has_data_placeholder():
+    template = build_site_module.DASHBOARD_TEMPLATE_PATH.read_text(encoding="utf-8")
+    assert template.count("__DATA__") == 1
+
+
 def test_build_payload_falls_back_to_daily_close_when_realtime_missing():
     macro_gold, macro_fx = _sample_macro()
     bars = _sample_bars()
@@ -432,7 +670,8 @@ def test_render_html_includes_score_panel_and_realtime_price():
     html = render_html(payload)
 
     assert "renderTechnicalScore(target)" in html
-    assert "score-composite" in html
+    assert "score-big" in html
+    assert "priceInfo(target)" in html
     assert "target.latest.is_realtime" in html
     assert "live-dot" in html
 
@@ -461,7 +700,9 @@ def test_render_html_includes_ai_summary_render_hook():
     html = render_html(payload)
 
     assert "renderAiSummary(target)" in html
-    assert "ai-summary-card" in html
+    # 沒有摘要時要明講，不能讓區塊悄悄消失（之前就是這樣讓人以為只有國際盤有）。
+    assert "今日摘要暫時無法產生" in html
+    assert "summary.generated_date" in html
 
 
 def test_fetch_bars_with_fallback_uses_prior_month_when_current_month_has_no_data(

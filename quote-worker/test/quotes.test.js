@@ -20,7 +20,7 @@ test("bestBookPrice 取第一檔，'-' 與空值回 null", () => {
 
 test("parseTwseRow：有成交價用 z", () => {
   const q = parseTwseRow({ z: "44.60", y: "45.80", a: "44.70_", b: "44.50_", t: "12:47:03" });
-  assert.deepEqual(q, { close: 44.6, quote_time: "12:47:03", is_realtime: true });
+  assert.deepEqual(q, { close: 44.6, quote_time: "12:47:03", is_realtime: true, prev_close: 45.8 });
 });
 
 test("parseTwseRow：z 是 '-' 時用買賣一中間價（00635U 整天都沒有 z）", () => {
