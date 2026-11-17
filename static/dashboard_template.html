@@ -954,7 +954,7 @@ function renderTarget(code) {
 
 // ---- AI 小幫手（聊天視窗）---------------------------------------------------
 //
-// 對話送到 Worker 的 /chat，由它帶上站上最新資料、必要時呼叫計算工具再交給 Gemini。
+// 對話送到 Worker 的 /chat，由它帶上站上最新資料、先由程式算好試算結果，再交給 Cloudflare Workers AI 用白話說明。
 // 金鑰只在 Worker 端；網頁只知道網址。對話只存在這個頁面的記憶體裡，關掉頁面就清掉。
 
 const ASSISTANT = { busy: false, messages: [], log: null, input: null, send: null, chips: null, panel: null, fab: null };

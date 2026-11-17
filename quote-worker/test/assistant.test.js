@@ -8,6 +8,9 @@ import {
   checkRateLimit,
   compareCosts,
   isAllowedOrigin,
+  parseAmount,
+  parseDiscount,
+  planToolRun,
   runConversation,
   runTool,
   validateChatRequest,
@@ -172,41 +175,161 @@ test("buildSystemPrompt：含規則、站上資料與開戶資訊，並標出目
   assert.ok(!buildSystemPrompt(buildSnapshot(site()), "NOPE").includes("使用者目前在看的標的"));
 });
 
-test("runConversation：模型要求呼叫工具時，在本地執行並把結果送回", async () => {
-  const calls = [];
+const chatReply = (content, toolCalls) => ({
+  choices: [{ message: { role: "assistant", content, ...(toolCalls ? { tool_calls: toolCalls } : {}) } }],
+});
+const toolCall = (name, args, id = "call_1") => ({ id, type: "function", function: { name, arguments: JSON.stringify(args) } });
+
+test("parseAmount：萬、中文數字、帶逗號的元；沒提金額回 null", () => {
+  assert.equal(parseAmount("我有 10 萬元"), 100000);
+  assert.equal(parseAmount("5.5萬"), 55000);
+  assert.equal(parseAmount("十萬"), 100000);
+  assert.equal(parseAmount("二十五萬"), 250000);
+  assert.equal(parseAmount("預算 100,000 元"), 100000);
+  assert.equal(parseAmount("50000塊"), 50000);
+  assert.equal(parseAmount("怎麼分批"), null);
+  assert.equal(parseAmount("買 5 公克"), null);
+});
+
+test("parseDiscount：6 折、6.5 折、65 折；沒提或不合理回 null", () => {
+  assert.equal(parseDiscount("手續費 6 折"), 0.6);
+  assert.equal(parseDiscount("6.5折"), 0.65);
+  assert.equal(parseDiscount("65 折"), 0.65);
+  assert.equal(parseDiscount("沒折扣"), null);
+  assert.equal(parseDiscount("0 折"), null);
+});
+
+test("planToolRun：分批題由程式解析預算並預先試算（數字來自工具，不是模型）", () => {
+  const run = planToolRun([{ role: "user", content: "我有 10 萬元，要買台企銀黃金存摺，怎麼分批？" }], "TBBGOLD", site());
+  assert.equal(run.name, "calc_split_plan");
+  assert.deepEqual(run.args, { code: "TBBGOLD", budget: 100000 });
+  assert.equal(run.result.分批[0].觸發價, 4271);
+  assert.equal(run.result.分批.length, 4);
+});
+
+test("planToolRun：標的由題目決定，其次是目前在看的標的", () => {
+  const ask = (text, focus) => planToolRun([{ role: "user", content: text }], focus, site()).args.code;
+  assert.equal(ask("5 萬買 00708L 怎麼分批", "TBBGOLD"), "00708L");
+  assert.equal(ask("5 萬怎麼分批", "00635U"), "00635U");
+  assert.equal(ask("5 萬怎麼分批", "GCF"), "TBBGOLD"); // 國際金價不能買賣，改用存摺
+});
+
+test("planToolRun：沒有預算不試算（讓模型去問）；追問『那 5 萬呢』會沿用上一題的意圖範圍", () => {
+  assert.equal(planToolRun([{ role: "user", content: "我想分批買，怎麼分？" }], "TBBGOLD", site()), null);
+  const followUp = planToolRun(
+    [
+      { role: "user", content: "10 萬怎麼分批？" },
+      { role: "assistant", content: "…" },
+      { role: "user", content: "那 5 萬呢？" },
+    ],
+    "TBBGOLD",
+    site()
+  );
+  assert.equal(followUp.args.budget, 50000);
+});
+
+test("planToolRun：成本比較解析金額與折數，沒提就用工具預設", () => {
+  const withArgs = planToolRun([{ role: "user", content: "存摺和 ETF 哪個成本低？用 20 萬算，手續費 6 折" }], "TBBGOLD", site());
+  assert.equal(withArgs.name, "compare_costs");
+  assert.deepEqual(withArgs.args, { amount: 200000, broker_fee_discount: 0.6 });
+  assert.equal(withArgs.result.台企銀黃金存摺.進出一趟成本_金額, 2227); // 假資料牌價 4131／4085，價差 1.1135%
+  assert.equal(withArgs.result.黃金ETF.進出一趟成本_金額, 542);
+
+  const bare = planToolRun([{ role: "user", content: "存摺還是 ETF 比較划算？" }], "TBBGOLD", site());
+  assert.deepEqual(bare.args, {});
+  assert.equal(bare.result.投入金額, 100000);
+});
+
+test("planToolRun：一般問題不預先試算", () => {
+  assert.equal(planToolRun([{ role: "user", content: "RSI 是什麼？" }], "TBBGOLD", site()), null);
+  assert.equal(planToolRun([{ role: "user", content: "怎麼申辦黃金存摺？" }], "TBBGOLD", site()), null);
+});
+
+test("runConversation：預先試算的結果放進提示詞，且不再給模型工具（不會被它改數字）", async () => {
+  const bodies = [];
   const callModel = async (body) => {
-    calls.push(body);
-    if (calls.length === 1) {
-      return {
-        candidates: [{ content: { role: "model", parts: [{ functionCall: { name: "calc_split_plan", args: { code: "TBBGOLD", budget: 100000 } }, thoughtSignature: "sig" }] } }],
-      };
-    }
-    return { candidates: [{ content: { role: "model", parts: [{ text: "第一筆約 4,271 元。" }] } }] };
+    bodies.push(body);
+    return chatReply("第一筆 4271 元。");
   };
   const reply = await runConversation({
-    messages: [{ role: "user", content: "100000 元怎麼分批？" }],
+    messages: [{ role: "user", content: "10 萬怎麼分批？" }],
+    site: site(),
+    focusCode: "TBBGOLD",
+    callModel,
+  });
+  assert.equal(reply, "第一筆 4271 元。");
+  assert.equal(bodies.length, 1);
+  assert.equal(bodies[0].tools, undefined);
+  assert.equal(bodies[0].chat_template_kwargs.enable_thinking, false); // 推理模型要關思考，否則 token 全花在思考上
+  const [system, user] = bodies[0].messages;
+  assert.equal(system.role, "system");
+  assert.ok(system.content.includes("【本題試算結果】"));
+  assert.ok(system.content.includes('"觸發價":4271'));
+  assert.deepEqual(user, { role: "user", content: "10 萬怎麼分批？" });
+});
+
+test("runConversation：一般問題給工具；模型要求呼叫時在本地執行並把結果送回", async () => {
+  const bodies = [];
+  const callModel = async (body) => {
+    bodies.push(JSON.parse(JSON.stringify(body)));
+    if (bodies.length === 1) return chatReply("", [toolCall("calc_split_plan", { code: "TBBGOLD", budget: 100000 })]);
+    return chatReply("第一筆約 4,271 元。");
+  };
+  const reply = await runConversation({
+    messages: [{ role: "user", content: "如果照紀律，我手上資金該怎麼用？" }],
     site: site(),
     focusCode: "TBBGOLD",
     callModel,
   });
   assert.equal(reply, "第一筆約 4,271 元。");
-  assert.equal(calls.length, 2);
-  const second = calls[1].contents;
-  assert.equal(second[1].parts[0].thoughtSignature, "sig"); // 模型那一輪的內容原樣放回
-  const toolResult = second[2].parts[0].functionResponse;
-  assert.equal(toolResult.name, "calc_split_plan");
-  assert.equal(toolResult.response.分批[0].觸發價, 4271);
-  assert.equal(calls[0].tools[0].functionDeclarations.length, 2);
+  assert.equal(bodies.length, 2);
+  assert.equal(bodies[0].tools.length, 2);
+  assert.equal(bodies[0].tools[0].type, "function");
+  assert.equal(bodies[0].tool_choice, "auto");
+  const second = bodies[1].messages;
+  const assistantTurn = second[second.length - 2];
+  assert.equal(assistantTurn.role, "assistant");
+  assert.equal(assistantTurn.tool_calls[0].function.name, "calc_split_plan");
+  const toolTurn = second[second.length - 1];
+  assert.equal(toolTurn.role, "tool");
+  assert.equal(toolTurn.tool_call_id, "call_1");
+  assert.equal(JSON.parse(toolTurn.content).分批[0].觸發價, 4271);
+});
+
+test("runConversation：工具參數壞掉或是物件都能處理，未知工具回錯誤給模型", async () => {
+  const bodies = [];
+  const callModel = async (body) => {
+    bodies.push(JSON.parse(JSON.stringify(body)));
+    if (bodies.length === 1) {
+      return chatReply("", [
+        { id: "a", type: "function", function: { name: "compare_costs", arguments: "{壞掉" } },
+        { id: "b", type: "function", function: { name: "compare_costs", arguments: { amount: 50000 } } },
+        { id: "c", type: "function", function: { name: "rm_rf", arguments: "{}" } },
+      ]);
+    }
+    return chatReply("好。");
+  };
+  assert.equal(await runConversation({ messages: [{ role: "user", content: "hi" }], site: site(), callModel }), "好。");
+  const tools = bodies[1].messages.filter((m) => m.role === "tool").map((m) => JSON.parse(m.content));
+  assert.equal(tools[0].投入金額, 100000); // 壞掉的參數當成沒填，用預設
+  assert.equal(tools[1].投入金額, 50000);
+  assert.match(tools[2].error, /未知/);
 });
 
 test("runConversation：沒有工具呼叫就直接回文字；空回覆與無限工具迴圈會丟錯", async () => {
-  const text = async () => ({ candidates: [{ content: { parts: [{ text: "好的" }, { text: "。" }] } }] });
+  const text = async () => chatReply("好的。");
   assert.equal(await runConversation({ messages: [{ role: "user", content: "hi" }], site: site(), callModel: text }), "好的。");
 
-  const empty = async () => ({ candidates: [{ content: { parts: [] } }] });
+  const parts = async () => chatReply([{ type: "text", text: "好的" }, { type: "text", text: "。" }]);
+  assert.equal(await runConversation({ messages: [{ role: "user", content: "hi" }], site: site(), callModel: parts }), "好的。");
+
+  const legacy = async () => ({ response: "舊格式也行。" });
+  assert.equal(await runConversation({ messages: [{ role: "user", content: "hi" }], site: site(), callModel: legacy }), "舊格式也行。");
+
+  const empty = async () => chatReply("");
   await assert.rejects(runConversation({ messages: [{ role: "user", content: "hi" }], site: site(), callModel: empty }), /empty_reply/);
 
-  const forever = async () => ({ candidates: [{ content: { parts: [{ functionCall: { name: "compare_costs", args: {} } }] } }] });
+  const forever = async () => chatReply("", [toolCall("compare_costs", {})]);
   await assert.rejects(
     runConversation({ messages: [{ role: "user", content: "hi" }], site: site(), callModel: forever }),
     /too_many_tool_rounds/

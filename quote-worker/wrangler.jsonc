@@ -9,6 +9,8 @@
     // 存每個標的「上次通知到哪個階段」。id 只是資源編號，不是機密。
     { "binding": "NOTIFY_STATE", "id": "e038ea9c607545078a306b83c7ba6ce8" }
   ],
+  // AI 小幫手（POST /chat）用的 Workers AI：免金鑰，每天有免費 Neurons 額度。
+  "ai": { "binding": "AI" },
   "triggers": {
     // 每分鐘一次；程式內會依時段略過不需要的檢查（盤後只在 5 的倍數分鐘執行）。
     "crons": ["* * * * *"]

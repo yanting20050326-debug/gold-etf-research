@@ -22,7 +22,7 @@ import {
 } from "./quotes.js";
 import { runNotifyCheck } from "./notify.js";
 import {
-  GEMINI_URL,
+  AI_MODEL,
   checkRateLimit,
   isAllowedOrigin,
   runConversation,
@@ -127,8 +127,8 @@ export async function handleScheduled(event, env) {
 
 // ---- AI 小幫手 /chat ----------------------------------------------------------
 //
-// 需要 secret GEMINI_API_KEY（wrangler secret put GEMINI_API_KEY）；沒設定時回 503
-// not_configured，網頁會顯示「小幫手尚未啟用」，報價端點完全不受影響。
+// 用 Cloudflare Workers AI（wrangler.jsonc 的 `ai` binding，名稱 AI），不需要任何金鑰；
+// 沒有 binding 時回 503 not_configured，網頁會顯示「小幫手尚未啟用」，報價端點完全不受影響。
 // 只接受本站網址（見 assistant.js 的 ALLOWED_ORIGINS）發出的請求，並有每人／每日次數上限。
 
 function jsonResponse(body, status, headers) {
@@ -144,16 +144,18 @@ function chatCorsHeaders(origin) {
     : { Vary: "Origin" };
 }
 
-async function callGemini(apiKey, body) {
-  // 金鑰放在標頭而不是網址，錯誤訊息與日誌才不會把它帶出去。
-  const response = await fetch(GEMINI_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(25000),
+const AI_TIMEOUT_MS = 25000;
+
+async function callWorkersAi(ai, body) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error("workers_ai_timeout")), AI_TIMEOUT_MS);
   });
-  if (!response.ok) throw new Error(`gemini HTTP ${response.status}`);
-  return response.json();
+  try {
+    return await Promise.race([ai.run(AI_MODEL, body), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function handleChat(request, env) {
@@ -172,7 +174,7 @@ export async function handleChat(request, env) {
   }
   if (request.method !== "POST") return jsonResponse({ error: "method_not_allowed" }, 405, cors);
   if (!isAllowedOrigin(origin)) return jsonResponse({ error: "forbidden_origin" }, 403, cors);
-  if (!env.GEMINI_API_KEY) return jsonResponse({ error: "not_configured" }, 503, cors);
+  if (!env.AI) return jsonResponse({ error: "not_configured" }, 503, cors);
 
   let body;
   try {
@@ -193,7 +195,7 @@ export async function handleChat(request, env) {
       messages: checked.messages,
       site,
       focusCode: checked.code,
-      callModel: (modelBody) => callGemini(env.GEMINI_API_KEY, modelBody),
+      callModel: (modelBody) => callWorkersAi(env.AI, modelBody),
     });
     return jsonResponse({ reply }, 200, cors);
   } catch (error) {
