@@ -145,6 +145,17 @@
   .plan-banner h2 { font-size: 24px; font-weight: 800; letter-spacing: 0.04em; color: #2b2118; }
   .plan-banner p { margin-top: 4px; font-size: 14.5px; color: #5a4632; }
   .plan-body { background: #f8f2df; border: 1px solid #ecdcae; border-top: 0; border-radius: 0 0 12px 12px; padding: 16px; }
+  .plan-ai { background: #fff; border: 1.5px dashed var(--brand); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .plan-ai-title { font-size: 15px; font-weight: 700; color: var(--brand-dark); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .plan-ai-title small { font-size: 12px; font-weight: 400; color: var(--text-soft); }
+  .plan-ai-row { display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; }
+  .plan-ai textarea { flex: 1 1 320px; min-width: 0; font: inherit; font-size: 14px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; resize: vertical; min-height: 58px; }
+  .plan-ai textarea:focus-visible, .plan-ai button:focus-visible { outline: 3px solid var(--yellow); outline-offset: 1px; }
+  .plan-ai button { font: inherit; font-size: 14px; font-weight: 700; color: #fff; background: var(--brand); border: 0; border-radius: 999px; padding: 8px 18px; cursor: pointer; align-self: flex-end; }
+  .plan-ai button:disabled { background: var(--line); cursor: default; }
+  .plan-ai-msg { font-size: 13px; line-height: 1.6; border-radius: 8px; padding: 8px 12px; background: var(--cream-2); }
+  .plan-ai-msg.warn { background: var(--brand-soft); color: var(--brand-dark); }
+  .plan .ai-filled { border-color: #e0a800 !important; box-shadow: 0 0 0 3px #fde9a6; }
   .plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(330px, 100%), 1fr)); gap: 14px; }
   .plan-step { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
   .plan-step h3 { font-size: 16px; display: flex; align-items: center; gap: 8px; margin: 0; }
@@ -1136,26 +1147,136 @@ function planChanged(key, value) {
   updatePlanOutputs();
 }
 
+// AI 剛填好的欄位加黃框，客戶一改就拿掉。
+function markAiFilled(control, key) {
+  if (PLAN_AI.filled.indexOf(key) < 0) return control;
+  control.classList.add("ai-filled");
+  const clear = () => control.classList.remove("ai-filled");
+  control.addEventListener("input", clear);
+  control.addEventListener("change", clear);
+  return control;
+}
+
 function planSelect(list, key) {
   const select = el("select", {});
   list.forEach((item) => select.appendChild(el("option", { value: item[0], textContent: item[1] })));
   select.value = PLAN[key];
   select.addEventListener("change", () => planChanged(key, select.value));
-  return select;
+  return markAiFilled(select, key);
 }
 
 function planNumber(key, placeholder, step) {
   const input = el("input", { type: "number", min: "0", step: step || "1000", inputMode: "numeric", placeholder: placeholder || "" });
   input.value = PLAN[key];
   input.addEventListener("input", () => planChanged(key, input.value));
-  return input;
+  return markAiFilled(input, key);
 }
 
 function planText(key, placeholder) {
   const input = el("input", { type: "text", maxLength: 120, placeholder: placeholder || "" });
   input.value = PLAN[key];
   input.addEventListener("input", () => planChanged(key, input.value));
-  return input;
+  return markAiFilled(input, key);
+}
+
+// ---- 用一句話建立計畫（AI 協助填寫）----------------------------------------
+//
+// 客戶用一句話描述，Worker 的 /plan 請模型轉成計畫欄位，並由程式逐欄驗證後回傳；
+// 這裡只套用回傳的欄位，其餘維持原設定，最後一定讓客戶自己確認、修改（黃框標出 AI 填的欄位）。
+
+const PLAN_AI = { text: "", busy: false, message: "", tone: "", filled: [] };
+const PLAN_FIELD_LABELS = {
+  purpose: "為什麼買", horizon: "預計持有多久", purposeNote: "備註", code: "買哪一個",
+  budget: "總預算", monthly: "每月定期投入", extra: "額外加碼預算", maxLossPct: "最多能接受虧損",
+  needMoney: "持有期間會用到這筆錢嗎", reviewEvery: "多久回顧一次", customCondition: "我自己的條件",
+};
+
+function planDraftUrl() {
+  return SITE_DATA.assistant_url ? SITE_DATA.assistant_url.replace(/\/chat$/, "/plan") : null;
+}
+
+function renderPlanAiBox() {
+  const box = el("div", { className: "plan-ai" });
+  const title = el("div", { className: "plan-ai-title", textContent: "用一句話建立計畫" });
+  title.appendChild(el("small", { textContent: "金福企幫你填好下面的欄位，你再確認、修改" }));
+  box.appendChild(title);
+  const row = el("div", { className: "plan-ai-row" });
+  const area = el("textarea", { maxLength: 300, rows: 2, placeholder: "例如：我想五年後存小孩的教育基金，總預算 20 萬，每月再投 3000，最多能接受虧一成" });
+  area.value = PLAN_AI.text;
+  area.setAttribute("aria-label", "用一句話描述你的黃金購買計畫");
+  area.addEventListener("input", () => (PLAN_AI.text = area.value));
+  const button = el("button", { type: "button", textContent: PLAN_AI.busy ? "金福企填寫中…" : "交給金福企填寫" });
+  button.disabled = PLAN_AI.busy;
+  button.addEventListener("click", requestPlanDraft);
+  row.appendChild(area);
+  row.appendChild(button);
+  box.appendChild(row);
+  if (PLAN_AI.message) {
+    const msg = el("p", { className: "plan-ai-msg" + (PLAN_AI.tone === "warn" ? " warn" : ""), textContent: PLAN_AI.message });
+    msg.setAttribute("role", "status");
+    box.appendChild(msg);
+  }
+  return box;
+}
+
+async function requestPlanDraft() {
+  const text = PLAN_AI.text.trim();
+  if (PLAN_AI.busy) return;
+  if (!text) {
+    Object.assign(PLAN_AI, { message: "先用一句話描述你的計畫，例如目的、預算、每月投入、能接受虧多少。", tone: "warn" });
+    renderPlan(PLAN);
+    return;
+  }
+  Object.assign(PLAN_AI, { busy: true, message: "", tone: "", filled: [] });
+  renderPlan(PLAN);
+  try {
+    const res = await fetch(planDraftUrl(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: text }),
+    });
+    let data = null;
+    try {
+      data = await res.json();
+    } catch (e) {
+      data = null;
+    }
+    if (!res.ok || !data || !data.draft) {
+      Object.assign(PLAN_AI, { message: assistantErrorText(res.status, data && data.error), tone: "warn" });
+    } else {
+      applyPlanDraft(data.draft);
+    }
+  } catch (e) {
+    Object.assign(PLAN_AI, { message: "網路連不上，請稍後再試。", tone: "warn" });
+  }
+  PLAN_AI.busy = false;
+  renderPlan(PLAN);
+}
+
+function applyPlanDraft(draft) {
+  const keys = Object.keys(draft).filter((key) => key in PLAN_FIELD_LABELS);
+  if (keys.length === 0) {
+    Object.assign(PLAN_AI, { message: "這句話裡沒有讀到可以填的內容。可以說說買黃金的目的、總預算、每月投入或能接受虧多少。", tone: "warn", filled: [] });
+    return;
+  }
+  keys.forEach((key) => {
+    const value = draft[key];
+    PLAN[key] = typeof value === "number" ? String(value) : value;
+  });
+  if (draft.reviewEvery) {
+    const months = (PLAN_REVIEW_EVERY.find((item) => item[0] === draft.reviewEvery) || [0, 0, 3])[2];
+    PLAN.nextReview = addMonthsIso(new Date(), months);
+  }
+  savePlan();
+  const untouched = Object.keys(PLAN_FIELD_LABELS).filter((key) => keys.indexOf(key) < 0);
+  Object.assign(PLAN_AI, {
+    filled: keys,
+    tone: "",
+    message:
+      "已填入：" + keys.map((key) => PLAN_FIELD_LABELS[key]).join("、") + "（黃框標示）。" +
+      (untouched.length ? "你沒提到的維持原設定：" + untouched.map((key) => PLAN_FIELD_LABELS[key]).join("、") + "。" : "") +
+      "請檢查一遍，有不對的直接改。",
+  });
 }
 
 function planField(label, control, hint) {
@@ -1190,10 +1311,11 @@ function planStep(no, title, lead) {
   return step;
 }
 
-function renderPlan() {
+// planOverride：AI 填寫後直接用記憶體裡的計畫重畫（瀏覽器存不了 localStorage 時也不會遺失剛填的內容）。
+function renderPlan(planOverride) {
   const host = document.getElementById("plan");
   if (!host) return;
-  PLAN = loadPlan();
+  PLAN = planOverride || loadPlan();
   host.innerHTML = "";
 
   const banner = el("div", { className: "plan-banner" });
@@ -1202,6 +1324,7 @@ function renderPlan() {
   host.appendChild(banner);
 
   const body = el("div", { className: "plan-body" });
+  if (planDraftUrl()) body.appendChild(renderPlanAiBox());
   const grid = el("div", { className: "plan-grid" });
 
   // 1. 購買目的
@@ -1224,6 +1347,7 @@ function renderPlan() {
   });
   targetSelect.value = PLAN.code;
   targetSelect.addEventListener("change", () => planChanged("code", targetSelect.value));
+  markAiFilled(targetSelect, "code");
   s2.appendChild(planField("買哪一個", targetSelect, "國際金價無法在台灣直接買賣，所以只列存摺與 ETF。"));
   const r2 = el("div", { className: "plan-row" });
   r2.appendChild(planField("總預算", planNumber("budget", "例如 100000"), "這份計畫最多投入的錢"));
@@ -1271,6 +1395,7 @@ function renderPlan() {
   const every = el("select", {});
   PLAN_REVIEW_EVERY.forEach((item) => every.appendChild(el("option", { value: item[0], textContent: item[1] })));
   every.value = PLAN.reviewEvery;
+  markAiFilled(every, "reviewEvery");
   const nextDate = el("input", { type: "date" });
   nextDate.value = PLAN.nextReview;
   every.addEventListener("change", () => {
@@ -1309,6 +1434,7 @@ function renderPlan() {
     } catch (error) {
       /* 忽略 */
     }
+    Object.assign(PLAN_AI, { text: "", message: "", tone: "", filled: [] });
     renderPlan();
   });
   actions.appendChild(copy);

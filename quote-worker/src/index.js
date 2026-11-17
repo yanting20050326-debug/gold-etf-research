@@ -28,6 +28,7 @@ import {
   runConversation,
   validateChatRequest,
 } from "./assistant.js";
+import { extractPlanDraft, validatePlanDraftRequest } from "./plan_draft.js";
 
 const SITE_DATA_URL =
   "https://yanting20050326-debug.github.io/gold-research-site/data/gold_site.json";
@@ -247,36 +248,67 @@ async function callWorkersAi(ai, body) {
   }
 }
 
-export async function handleChat(request, env) {
+// /chat 與 /plan 共用的關卡：CORS 預檢、只收 POST、只收本站來源、要有 AI binding、body 是 JSON。
+// 通過回 { cors, body }；沒通過回 { response }（直接回給瀏覽器）。
+async function guardAssistantRequest(request, env) {
   const origin = request.headers.get("Origin");
   const cors = chatCorsHeaders(origin);
   if (request.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        ...cors,
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
-        "Access-Control-Max-Age": "86400",
-      },
-    });
+    return {
+      response: new Response(null, {
+        status: 204,
+        headers: {
+          ...cors,
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type",
+          "Access-Control-Max-Age": "86400",
+        },
+      }),
+    };
   }
-  if (request.method !== "POST") return jsonResponse({ error: "method_not_allowed" }, 405, cors);
-  if (!isAllowedOrigin(origin)) return jsonResponse({ error: "forbidden_origin" }, 403, cors);
-  if (!env.AI) return jsonResponse({ error: "not_configured" }, 503, cors);
-
-  let body;
+  if (request.method !== "POST") return { response: jsonResponse({ error: "method_not_allowed" }, 405, cors) };
+  if (!isAllowedOrigin(origin)) return { response: jsonResponse({ error: "forbidden_origin" }, 403, cors) };
+  if (!env.AI) return { response: jsonResponse({ error: "not_configured" }, 503, cors) };
   try {
-    body = await request.json();
+    return { cors, body: await request.json() };
   } catch {
-    return jsonResponse({ error: "bad_request" }, 400, cors);
+    return { response: jsonResponse({ error: "bad_request" }, 400, cors) };
   }
-  const checked = validateChatRequest(body);
-  if (!checked.ok) return jsonResponse({ error: checked.error }, 400, cors);
+}
 
+// 次數上限兩個端點共用（同一個 KV 計數），超過回 429 的回應，否則回 null。
+async function rateLimitResponse(request, env, cors) {
   const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
   const limit = await checkRateLimit(env.NOTIFY_STATE, ip);
-  if (!limit.ok) return jsonResponse({ error: limit.error }, 429, cors);
+  return limit.ok ? null : jsonResponse({ error: limit.error }, 429, cors);
+}
+
+// 「用一句話建立購買計畫」：模型把一句話轉成計畫欄位，plan_draft.js 逐欄驗證後回傳。
+export async function handlePlanDraft(request, env) {
+  const guard = await guardAssistantRequest(request, env);
+  if (guard.response) return guard.response;
+  const { cors, body } = guard;
+  const checked = validatePlanDraftRequest(body);
+  if (!checked.ok) return jsonResponse({ error: checked.error }, 400, cors);
+  const limited = await rateLimitResponse(request, env, cors);
+  if (limited) return limited;
+  try {
+    const result = await extractPlanDraft({ text: checked.text, callModel: (modelBody) => callWorkersAi(env.AI, modelBody) });
+    return jsonResponse(result, 200, cors);
+  } catch (error) {
+    console.error("plan draft failed:", String(error?.message ?? error));
+    return jsonResponse({ error: "upstream_error" }, 502, cors);
+  }
+}
+
+export async function handleChat(request, env) {
+  const guard = await guardAssistantRequest(request, env);
+  if (guard.response) return guard.response;
+  const { cors, body } = guard;
+  const checked = validateChatRequest(body);
+  if (!checked.ok) return jsonResponse({ error: checked.error }, 400, cors);
+  const limited = await rateLimitResponse(request, env, cors);
+  if (limited) return limited;
 
   try {
     const site = await fetchSiteData();
@@ -299,7 +331,9 @@ export default {
   },
 
   async fetch(request, env, ctx) {
-    if (new URL(request.url).pathname === "/chat") return handleChat(request, env);
+    const pathname = new URL(request.url).pathname;
+    if (pathname === "/chat") return handleChat(request, env);
+    if (pathname === "/plan") return handlePlanDraft(request, env);
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
     }

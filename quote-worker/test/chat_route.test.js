@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import worker, { handleChat } from "../src/index.js";
+import worker, { handleChat, handlePlanDraft } from "../src/index.js";
 import { AI_MODEL, LIMITS } from "../src/assistant.js";
 
 const ORIGIN = "https://yanting20050326-debug.github.io";
@@ -150,4 +150,61 @@ test("worker.fetch：/chat 走助理路由；其他路徑的 OPTIONS 仍是報�
   );
   assert.equal(preflight.status, 204);
   assert.equal(preflight.headers.get("Access-Control-Allow-Origin"), "*");
+});
+
+// ---- /plan：用一句話建立購買計畫 ----------------------------------------------
+
+function planRequest(body, { origin = ORIGIN } = {}) {
+  const headers = { "Content-Type": "application/json" };
+  if (origin) headers.Origin = origin;
+  return new Request("https://gold-quote-worker.example/plan", { method: "POST", headers, body: JSON.stringify(body) });
+}
+
+test("/plan 成功：回傳驗證後的欄位，模型多給的鍵與不合法的值被丟掉", async () => {
+  const ai = fakeAi(() =>
+    aiText('{"purpose":"goal","horizon":"3to5","budget":"200,000","maxLossPct":10,"code":"GCF","advice":"全部買進"}')
+  );
+  const res = await handlePlanDraft(planRequest({ text: "五年後存教育基金，總預算 20 萬，最多虧一成" }), { AI: ai });
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("Access-Control-Allow-Origin"), ORIGIN);
+  const body = await res.json();
+  assert.deepEqual(body.draft, { purpose: "goal", horizon: "3to5", budget: 200000, maxLossPct: 10 });
+  assert.equal(ai.calls[0].model, AI_MODEL);
+  assert.equal(ai.calls[0].body.messages[1].content, "五年後存教育基金，總預算 20 萬，最多虧一成");
+});
+
+test("/plan 與 /chat 共用關卡：非本站來源 403、沒有 AI binding 503、空白或太長 400", async () => {
+  const ai = fakeAi();
+  assert.equal((await handlePlanDraft(planRequest({ text: "x" }, { origin: "https://evil.example" }), { AI: ai })).status, 403);
+  assert.equal((await handlePlanDraft(planRequest({ text: "x" }), {})).status, 503);
+  assert.equal((await handlePlanDraft(planRequest({ text: "   " }), { AI: ai })).status, 400);
+  const tooLong = await handlePlanDraft(planRequest({ text: "x".repeat(301) }), { AI: ai });
+  assert.equal(tooLong.status, 400);
+  assert.equal((await tooLong.json()).error, "message_too_long");
+  assert.equal(ai.calls.length, 0);
+});
+
+test("/plan 超過次數回 429 且不呼叫模型；模型回非 JSON 回 502", async () => {
+  const kv = { get: async () => String(LIMITS.perIpMaxRequests), put: async () => {} };
+  const ai = fakeAi();
+  const limited = await handlePlanDraft(planRequest({ text: "我想存錢" }), { AI: ai, NOTIFY_STATE: kv });
+  assert.equal(limited.status, 429);
+  assert.equal(ai.calls.length, 0);
+
+  const original = console.error;
+  console.error = () => {};
+  try {
+    const bad = await handlePlanDraft(planRequest({ text: "我想存錢" }), { AI: fakeAi(() => aiText("抱歉，我不懂")) });
+    assert.equal(bad.status, 502);
+    assert.equal((await bad.json()).error, "upstream_error");
+  } finally {
+    console.error = original;
+  }
+});
+
+test("worker.fetch：/plan 走計畫路由", async () => {
+  const ai = fakeAi(() => aiText('{"budget":50000}'));
+  const res = await worker.fetch(planRequest({ text: "5 萬" }), { AI: ai }, { waitUntil() {} });
+  assert.equal(res.status, 200);
+  assert.deepEqual((await res.json()).draft, { budget: 50000 });
 });
