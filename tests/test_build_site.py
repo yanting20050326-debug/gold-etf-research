@@ -624,6 +624,41 @@ def test_prior_low_broken_is_false_in_an_uptrend():
     assert payload["targets"]["00635U"]["indicators"]["prior_low_broken"] is False
 
 
+def test_payload_points_the_assistant_at_the_worker_chat_route():
+    macro_gold, macro_fx = _sample_macro()
+    payload = build_payload(
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
+    )
+    assert payload["assistant_url"] == payload["live_quotes_url"] + "chat"
+    assert payload["assistant_url"].startswith("https://")
+
+
+def test_render_html_includes_the_assistant_chat_widget():
+    macro_gold, macro_fx = _sample_macro()
+    payload = build_payload(
+        {"00635U": _sample_bars()},
+        macro_gold,
+        macro_fx,
+        datetime(2026, 8, 20, tzinfo=UTC),
+    )
+    html = render_html(payload)
+
+    assert "initAssistant()" in html
+    assert "SITE_DATA.assistant_url" in html
+    assert "sendAssistantMessage" in html
+    # 金鑰只在 Worker 端：網頁不能出現任何金鑰字樣或帶 key= 的網址。
+    assert "x-goog-api-key" not in html
+    assert "key=" not in html
+    # 沒啟用、被限流時要有明確的說明，不能默默失敗。
+    assert "小幫手還沒啟用" in html
+    assert "今天的提問次數已達上限" in html
+    # 失敗的那一輪不能被帶進下一次對話的上下文。
+    assert "userMessage.skip = true" in html
+
+
 def test_dashboard_template_file_exists_and_has_data_placeholder():
     template = build_site_module.DASHBOARD_TEMPLATE_PATH.read_text(encoding="utf-8")
     assert template.count("__DATA__") == 1

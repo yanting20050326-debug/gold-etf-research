@@ -131,6 +131,35 @@
   .rule-list { margin: 8px 0 0; padding-left: 20px; font-size: 13.5px; line-height: 1.7; }
   .footer-note { margin-top: 14px; font-size: 12.5px; color: var(--text-soft); }
 
+  /* AI 小幫手 */
+  .shell { padding-bottom: 84px; }
+  .assistant-fab { position: fixed; right: 16px; bottom: 16px; z-index: 60; border: 0; cursor: pointer; font: inherit; font-weight: 700; font-size: 15px; color: #fff; background: var(--brand); padding: 12px 20px; border-radius: 999px; box-shadow: 0 8px 22px rgba(218, 55, 0, 0.35); }
+  .assistant-fab:hover { background: var(--brand-dark); }
+  .assistant-fab:focus-visible, .assistant-panel button:focus-visible, .assistant-panel input:focus-visible { outline: 3px solid var(--yellow); outline-offset: 2px; }
+  .assistant-panel { position: fixed; right: 16px; bottom: 72px; z-index: 60; width: min(380px, calc(100vw - 32px)); height: min(540px, calc(100vh - 96px)); background: #fff; border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 16px 40px rgba(51, 51, 51, 0.22); display: none; flex-direction: column; overflow: hidden; }
+  .assistant-panel.open { display: flex; }
+  .assistant-head { background: var(--brand); color: #fff; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; }
+  .assistant-head b { font-size: 15px; }
+  .assistant-head button { background: transparent; border: 0; color: #fff; font-size: 20px; line-height: 1; cursor: pointer; padding: 2px 6px; }
+  .assistant-log { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--cream); }
+  .msg { max-width: 88%; padding: 8px 12px; border-radius: 12px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+  .msg.user { align-self: flex-end; background: var(--brand-soft); }
+  .msg.assistant { align-self: flex-start; background: #fff; border: 1px solid var(--line); }
+  .msg.error { border-style: dashed; color: var(--brand-dark); }
+  .msg.typing { color: var(--text-soft); }
+  .assistant-chips { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 12px 0; background: #fff; max-height: 112px; overflow-y: auto; }
+  .assistant-chips button { font: inherit; font-size: 12.5px; background: var(--cream-2); color: var(--brand-dark); border: 1px solid var(--brand-soft); border-radius: 999px; padding: 4px 10px; cursor: pointer; text-align: left; }
+  .assistant-chips button:hover { background: var(--brand-soft); }
+  .assistant-form { display: flex; gap: 8px; padding: 8px 12px; background: #fff; }
+  .assistant-form input { flex: 1; min-width: 0; font: inherit; font-size: 14px; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; }
+  .assistant-form button { font: inherit; font-weight: 700; font-size: 14px; color: #fff; background: var(--brand); border: 0; border-radius: 999px; padding: 8px 16px; cursor: pointer; }
+  .assistant-form button:disabled { background: var(--line); cursor: default; }
+  .assistant-note { padding: 0 12px 10px; font-size: 11.5px; color: var(--text-soft); background: #fff; line-height: 1.4; }
+  @media (max-width: 620px) {
+    .assistant-panel { right: 8px; left: 8px; width: auto; bottom: 66px; }
+    .assistant-fab { right: 10px; bottom: 10px; }
+  }
+
   @media (max-width: 1020px) {
     .main { grid-template-columns: 1fr; }
     .ind-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -914,6 +943,176 @@ function renderTarget(code) {
   view.appendChild(rowB);
   view.appendChild(renderFolds(target));
   updateTabActiveState();
+  updateAssistantChips();
+}
+
+// ---- AI 小幫手（聊天視窗）---------------------------------------------------
+//
+// 對話送到 Worker 的 /chat，由它帶上站上最新資料、必要時呼叫計算工具再交給 Gemini。
+// 金鑰只在 Worker 端；網頁只知道網址。對話只存在這個頁面的記憶體裡，關掉頁面就清掉。
+
+const ASSISTANT = { busy: false, messages: [], log: null, input: null, send: null, chips: null, panel: null, fab: null };
+const ASSISTANT_LIMITS = { messages: 8, total: 5000, assistantChars: 1500 };
+
+function assistantErrorText(status, code) {
+  if (status === 503 || code === "not_configured") return "小幫手還沒啟用（站主尚未設定 AI 金鑰）。其他功能不受影響。";
+  if (code === "rate_limited") return "問得有點快，請過幾分鐘再試。";
+  if (code === "daily_limit") return "今天的提問次數已達上限，明天再來問吧。";
+  if (code === "message_too_long" || code === "too_many_messages") return "這段對話太長了，請重新整理頁面再開始。";
+  return "小幫手暫時無法使用，請稍後再試。";
+}
+
+function buildSendMessages() {
+  const list = ASSISTANT.messages
+    .filter((m) => !m.skip)
+    .map((m) => ({ role: m.role, content: m.role === "assistant" ? m.content.slice(0, ASSISTANT_LIMITS.assistantChars) : m.content }));
+  const total = () => list.reduce((sum, m) => sum + m.content.length, 0);
+  // 太長就丟掉最舊的；而且一定要從使用者的訊息開始。
+  while (list.length > ASSISTANT_LIMITS.messages || total() > ASSISTANT_LIMITS.total || (list.length && list[0].role !== "user")) {
+    list.shift();
+  }
+  return list;
+}
+
+function plainAssistantText(text) {
+  return text.replace(/\*\*/g, "").replace(/^\s{0,3}#+\s*/gm, "").replace(/^\s*[*-]\s+/gm, "• ");
+}
+
+function addAssistantBubble(role, text, extraClass) {
+  const bubble = el("div", { className: "msg " + role + (extraClass ? " " + extraClass : ""), textContent: role === "assistant" ? plainAssistantText(text) : text });
+  ASSISTANT.log.appendChild(bubble);
+  ASSISTANT.log.scrollTop = ASSISTANT.log.scrollHeight;
+  return bubble;
+}
+
+function setAssistantBusy(busy) {
+  ASSISTANT.busy = busy;
+  ASSISTANT.send.disabled = busy;
+  ASSISTANT.input.disabled = busy;
+  if (!busy) ASSISTANT.input.focus();
+}
+
+async function sendAssistantMessage(rawText) {
+  const text = rawText.trim();
+  if (!text || ASSISTANT.busy) return;
+  const userMessage = { role: "user", content: text };
+  ASSISTANT.messages.push(userMessage);
+  addAssistantBubble("user", text);
+  ASSISTANT.input.value = "";
+  setAssistantBusy(true);
+  const typing = addAssistantBubble("assistant", "思考中…", "typing");
+  try {
+    const res = await fetch(SITE_DATA.assistant_url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: buildSendMessages(), code: currentTargetCode }),
+    });
+    let data = null;
+    try {
+      data = await res.json();
+    } catch (e) {
+      data = null;
+    }
+    typing.remove();
+    if (res.ok && data && data.reply) {
+      ASSISTANT.messages.push({ role: "assistant", content: data.reply });
+      addAssistantBubble("assistant", data.reply);
+    } else {
+      userMessage.skip = true; // 這一輪失敗，不要把它帶進下一次的上下文
+      addAssistantBubble("assistant", assistantErrorText(res.status, data && data.error), "error");
+    }
+  } catch (e) {
+    typing.remove();
+    userMessage.skip = true;
+    addAssistantBubble("assistant", "網路連不上，請稍後再試。", "error");
+  } finally {
+    setAssistantBusy(false);
+  }
+}
+
+function assistantSuggestions() {
+  const target = SITE_DATA.targets[currentTargetCode];
+  const ps = target && target.indicators.pullback_stage;
+  const stage = ps ? STAGE_SHORT[stageIndex(ps.stage)] : null;
+  const name = target ? shortName(target) : "這個標的";
+  return [
+    stage ? "為什麼「" + name + "」現在是「" + stage + "」階段？" : "現在是什麼階段？",
+    "RSI、布林通道、MACD 各代表什麼？",
+    "我有 10 萬元，幫我算分批計畫",
+    "存摺和 ETF 哪個成本低？",
+    "我是新手，要怎麼開始買黃金？",
+  ];
+}
+
+function updateAssistantChips() {
+  if (!ASSISTANT.chips) return;
+  ASSISTANT.chips.innerHTML = "";
+  assistantSuggestions().forEach((text) => {
+    const chip = el("button", { type: "button", textContent: text });
+    chip.addEventListener("click", () => sendAssistantMessage(text));
+    ASSISTANT.chips.appendChild(chip);
+  });
+}
+
+function setAssistantOpen(open) {
+  ASSISTANT.panel.classList.toggle("open", open);
+  ASSISTANT.fab.setAttribute("aria-expanded", open ? "true" : "false");
+  ASSISTANT.fab.textContent = open ? "收起小幫手" : "問小幫手";
+  if (open) ASSISTANT.input.focus();
+}
+
+function initAssistant() {
+  if (!SITE_DATA.assistant_url) return;
+  const fab = el("button", { className: "assistant-fab", type: "button", textContent: "問小幫手" });
+  fab.setAttribute("aria-expanded", "false");
+  fab.setAttribute("aria-controls", "assistant-panel");
+  const panel = el("section", { className: "assistant-panel", id: "assistant-panel" });
+  panel.setAttribute("role", "dialog");
+  panel.setAttribute("aria-label", "金羅盤 AI 小幫手");
+
+  const head = el("div", { className: "assistant-head" });
+  head.appendChild(el("b", { textContent: "金羅盤小幫手" }));
+  const close = el("button", { type: "button", textContent: "×" });
+  close.setAttribute("aria-label", "關閉小幫手");
+  head.appendChild(close);
+  panel.appendChild(head);
+
+  const log = el("div", { className: "assistant-log" });
+  log.setAttribute("aria-live", "polite");
+  panel.appendChild(log);
+
+  const chips = el("div", { className: "assistant-chips" });
+  panel.appendChild(chips);
+
+  const form = el("form", { className: "assistant-form" });
+  const input = el("input", { type: "text", maxLength: 500, placeholder: "輸入問題，例如：RSI 是什麼？" });
+  input.setAttribute("aria-label", "輸入問題");
+  const send = el("button", { type: "submit", textContent: "送出" });
+  form.appendChild(input);
+  form.appendChild(send);
+  panel.appendChild(form);
+  panel.appendChild(
+    el("p", { className: "assistant-note", textContent: "小幫手根據本站最新數據回答，會用程式計算數字；不給買賣指令，也不知道新聞。僅供研究參考。" })
+  );
+
+  Object.assign(ASSISTANT, { log: log, input: input, send: send, chips: chips, panel: panel, fab: fab });
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    sendAssistantMessage(input.value);
+  });
+  fab.addEventListener("click", () => setAssistantOpen(!panel.classList.contains("open")));
+  close.addEventListener("click", () => setAssistantOpen(false));
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && panel.classList.contains("open")) setAssistantOpen(false);
+  });
+
+  addAssistantBubble(
+    "assistant",
+    "嗨，我是金羅盤小幫手。可以幫你：\n• 解釋指標和目前的階段\n• 試算分批計畫（告訴我預算）\n• 比較黃金存摺和 ETF 的成本\n• 新手開戶導覽\n點下面的問題，或直接輸入。"
+  );
+  updateAssistantChips();
+  document.body.appendChild(fab);
+  document.body.appendChild(panel);
 }
 
 function refreshSiteData() {
@@ -966,6 +1165,7 @@ renderDisclaimer();
 currentTargetCode = orderedCodes()[0];
 renderTargetTabs();
 renderTarget(currentTargetCode);
+initAssistant();
 markPageUpdatedNow();
 if (SITE_DATA.auto_refresh_seconds) {
   setInterval(refreshSiteData, SITE_DATA.auto_refresh_seconds * 1000);

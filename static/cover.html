@@ -25,13 +25,7 @@
   html, body { margin: 0; min-height: 100%; }
   body { background: var(--cream); color: var(--text); font-family: "Microsoft JhengHei", "Noto Sans TC", system-ui, sans-serif; }
 
-  .cover {
-    position: relative;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
+  .cover { position: relative; min-height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
   .topband { height: 10px; background: var(--brand); }
   .topband::after { content: ""; display: block; height: 3px; background: var(--yellow); margin-top: 10px; }
 
@@ -41,37 +35,39 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: clamp(14px, 3vh, 26px);
-    padding: 32px 20px 24px;
+    gap: clamp(10px, 2vh, 18px);
+    padding: 20px 20px 12px;
     text-align: center;
   }
   .stage > * { animation: rise 0.9s ease-out both; }
-  .stage > :nth-child(2) { animation-delay: 0.08s; }
-  .stage > :nth-child(3) { animation-delay: 0.16s; }
-  .stage > :nth-child(4) { animation-delay: 0.24s; }
-  .stage > :nth-child(5) { animation-delay: 0.32s; }
+  .stage > :nth-child(2) { animation-delay: 0.06s; }
+  .stage > :nth-child(3) { animation-delay: 0.12s; }
+  .stage > :nth-child(4) { animation-delay: 0.18s; }
+  .stage > :nth-child(5) { animation-delay: 0.24s; }
+  .stage > :nth-child(6) { animation-delay: 0.3s; }
 
-  .compass-wrap { position: relative; width: min(42vw, 210px); aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center; }
+  .compass-wrap { position: relative; width: min(34vw, 150px); aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center; }
   .compass-glow { position: absolute; inset: -22%; border-radius: 50%; background: radial-gradient(circle, rgba(250, 190, 0, 0.45) 0%, rgba(255, 234, 215, 0.5) 45%, rgba(255, 251, 248, 0) 72%); animation: glowPulse 5s ease-in-out infinite; pointer-events: none; }
   .compass-svg { position: relative; width: 100%; height: 100%; filter: drop-shadow(0 6px 14px rgba(218, 55, 0, 0.22)); }
   .compass-ring { transform-origin: 150px 150px; animation: ringDrift 90s linear infinite; }
   .compass-needle { transform-origin: 150px 150px; animation: needleSpin 48s linear infinite; }
 
-  .brand-title { margin: 0; font-size: clamp(40px, 8vw, 64px); font-weight: 700; letter-spacing: 0.16em; color: var(--brand); line-height: 1.1; }
-  .brand-subtitle { margin: 6px 0 0; font-size: clamp(12px, 1.6vw, 14px); letter-spacing: 0.5em; color: var(--text-soft); text-transform: uppercase; }
-  .tagline { margin: 0; max-width: 30em; font-size: clamp(16px, 2.4vw, 20px); line-height: 1.7; color: var(--text); }
+  .brand-title { margin: 0; font-size: clamp(36px, 7vw, 56px); font-weight: 700; letter-spacing: 0.16em; color: var(--brand); line-height: 1.1; }
+  .brand-subtitle { margin: 4px 0 0; font-size: clamp(12px, 1.6vw, 14px); letter-spacing: 0.5em; color: var(--text-soft); text-transform: uppercase; }
+  .tagline { margin: 0; max-width: 30em; font-size: clamp(15px, 2.2vw, 18px); line-height: 1.6; }
   .tagline b { color: var(--brand-dark); }
 
   .ticker { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; visibility: hidden; }
   .ticker.ready { visibility: visible; }
-  .tick { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 8px 16px; min-width: 150px; }
+  .tick { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 8px 20px; min-width: 190px; }
   .tick-name { display: block; font-size: 13px; color: var(--text-soft); }
-  .tick-price { display: block; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
-  .tick-price.off { font-size: 15px; font-weight: 400; color: var(--text-soft); }
+  .tick-price { display: block; font-size: 24px; font-weight: 700; letter-spacing: -0.01em; }
+  .tick-unit { font-size: 13px; font-weight: 400; color: var(--text-soft); margin-left: 4px; }
+  .tick-note { display: block; font-size: 12px; color: var(--text-soft); }
 
   .enter-button {
     display: inline-flex; align-items: center; gap: 10px;
-    padding: 14px 40px;
+    padding: 13px 40px;
     background: var(--brand); color: #fff;
     border-radius: 999px;
     font-size: 17px; font-weight: 700; letter-spacing: 0.2em;
@@ -81,16 +77,30 @@
   }
   .enter-button:hover { background: var(--brand-dark); transform: translateY(-1px); box-shadow: 0 12px 28px rgba(218, 55, 0, 0.34); }
   .enter-button:active { transform: translateY(0); }
-  .enter-button:focus-visible { outline: 3px solid var(--yellow); outline-offset: 3px; }
+  a:focus-visible { outline: 3px solid var(--yellow); outline-offset: 3px; }
 
-  .points { display: flex; gap: 10px 22px; flex-wrap: wrap; justify-content: center; margin: 0; padding: 0; list-style: none; font-size: 14px; color: var(--text-soft); }
-  .points li::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--yellow); margin-right: 8px; vertical-align: 1px; }
+  .paths { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; width: min(100%, 640px); }
+  .path { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px 14px; text-align: left; display: flex; flex-direction: column; gap: 6px; }
+  .path-title { margin: 0; font-size: 15px; font-weight: 700; }
+  .path-desc { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-soft); flex: 1; }
+  .path-button {
+    align-self: flex-start;
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-top: 2px;
+    padding: 8px 16px;
+    border: 2px solid var(--brand); border-radius: 999px;
+    color: var(--brand-dark); background: var(--cream-2);
+    font-size: 14px; font-weight: 700; text-decoration: none;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+  .path-button:hover { background: var(--brand); color: #fff; }
 
-  .foot { padding: 14px 20px 20px; text-align: center; font-size: 12.5px; color: var(--text-soft); }
+  .foot { padding: 8px 20px 16px; text-align: center; font-size: 12.5px; color: var(--text-soft); line-height: 1.6; }
 
-  @media (max-width: 520px) {
-    .tick { min-width: 0; flex: 1 1 140px; }
-    .enter-button { padding: 13px 32px; }
+  @media (max-width: 560px) {
+    .paths { grid-template-columns: 1fr; }
+    .tick { min-width: 0; flex: 1 1 150px; padding: 8px 14px; }
+    .enter-button { padding: 12px 32px; }
   }
   @media (prefers-reduced-motion: reduce) {
     .compass-ring, .compass-needle, .compass-glow, .stage > * { animation: none; }
@@ -140,54 +150,84 @@
       <p class="brand-subtitle">Gold Compass</p>
     </div>
 
-    <p class="tagline">國際金價與黃金 ETF，<b>回檔到哪一格、現在該做什麼</b>，一個畫面看清楚。</p>
+    <p class="tagline">黃金回檔到哪一格、<b>現在該做什麼</b>，一個畫面看清楚。</p>
 
-    <div class="ticker" id="ticker" aria-label="即時報價">
-      <div class="tick" data-code="GCF"><span class="tick-name">國際金價 COMEX</span><span class="tick-price">—</span></div>
-      <div class="tick" data-code="00635U"><span class="tick-name">元大S&amp;P黃金 00635U</span><span class="tick-price">—</span></div>
-      <div class="tick" data-code="00708L"><span class="tick-name">黃金正2 00708L</span><span class="tick-price">—</span></div>
+    <div class="ticker" id="ticker" aria-label="最新金價">
+      <div class="tick" data-code="TBBGOLD">
+        <span class="tick-name">台企銀黃金存摺　本行賣出價</span>
+        <span class="tick-price">—<span class="tick-unit">元／公克</span></span>
+        <span class="tick-note"></span>
+      </div>
+      <div class="tick" data-code="GCF">
+        <span class="tick-name">國際金價 COMEX</span>
+        <span class="tick-price">—<span class="tick-unit">美元／盎司</span></span>
+        <span class="tick-note"></span>
+      </div>
     </div>
 
     <a class="enter-button" href="dashboard.html">進入儀表板 <span aria-hidden="true">→</span></a>
 
-    <ul class="points">
-      <li>六個指標，一句話看懂</li>
-      <li>分批進場階段一目了然</li>
-      <li>盤中即時報價</li>
-    </ul>
+    <section class="paths" aria-label="開始投資黃金">
+      <div class="path">
+        <h2 class="path-title">想買黃金 ETF</h2>
+        <p class="path-desc">需要證券帳戶才能買賣 00635U、00708L。臺灣企銀證券開戶須攜證件親洽證券分公司辦理。</p>
+        <a class="path-button" href="https://www.tbb.com.tw/zh-tw/personal/investments/securities/intro" target="_blank" rel="noopener noreferrer">申辦證券帳戶 <span aria-hidden="true">↗</span></a>
+      </div>
+      <div class="path">
+        <h2 class="path-title">想買黃金存摺</h2>
+        <p class="path-desc">1 公克即可買賣，不必保管實體黃金。可臨櫃，或用網路銀行線上開戶。</p>
+        <a class="path-button" href="https://www.tbb.com.tw/zh-tw/personal/investments/gold/intro" target="_blank" rel="noopener noreferrer">申辦黃金存摺帳戶 <span aria-hidden="true">↗</span></a>
+      </div>
+    </section>
   </main>
-  <p class="foot">商品／避險資產研究參考，不構成投資建議，不自動下單，不保證收益。</p>
+  <p class="foot">按鈕連結至臺灣企銀官網，開戶資格、費用與交易規則以銀行公告為準。<br>商品／避險資產研究參考，不構成投資建議，不自動下單，不保證收益。</p>
 </div>
 <script>
-// 即時價格列：向報價 Worker 取價；連不上就維持隱藏，封面照常運作。
+// 最新金價列：台企銀牌價與國際金價。先讀同站已發布的資料（含台企銀牌價），
+// 國際金價再用報價 Worker 的即時價蓋掉；兩個來源都失敗就維持隱藏，封面照常運作。
 (function () {
   var WORKER_URL = "https://gold-quote-worker.abilabnpust.workers.dev/";
   var ticker = document.getElementById("ticker");
-  function fmt(v) {
-    return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  function fmt(value, digits) {
+    return value.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
   }
-  function load() {
-    fetch(WORKER_URL + "?ts=" + Date.now())
+  function show(code, price, digits, note) {
+    var tick = ticker.querySelector('.tick[data-code="' + code + '"]');
+    if (!tick || typeof price !== "number") return;
+    var priceEl = tick.querySelector(".tick-price");
+    var unit = priceEl.querySelector(".tick-unit");
+    priceEl.firstChild.nodeValue = fmt(price, digits);
+    priceEl.appendChild(unit);
+    if (note) tick.querySelector(".tick-note").textContent = note;
+    ticker.classList.add("ready");
+  }
+  function fetchJson(url) {
+    return fetch(url)
       .then(function (res) { return res.ok ? res.json() : null; })
-      .then(function (data) {
-        if (!data || !data.quotes || Object.keys(data.quotes).length === 0) return;
-        ticker.querySelectorAll(".tick").forEach(function (tick) {
-          var quote = data.quotes[tick.dataset.code];
-          var price = tick.querySelector(".tick-price");
-          if (quote && typeof quote.close === "number") {
-            price.textContent = fmt(quote.close);
-            price.classList.remove("off");
-          } else {
-            price.textContent = "非盤中";
-            price.classList.add("off");
-          }
-        });
-        ticker.classList.add("ready");
-      })
-      .catch(function () {});
+      .catch(function () { return null; });
   }
-  load();
-  setInterval(load, 30000);
+
+  function loadPublished() {
+    return fetchJson("data/gold_site.json?ts=" + Date.now()).then(function (site) {
+      if (!site || !site.targets) return;
+      var tbb = site.targets.TBBGOLD;
+      if (tbb) {
+        var listed = tbb.passbook_quote && tbb.passbook_quote.listed_at;
+        show("TBBGOLD", tbb.latest.close, 0, listed ? "銀行牌價　掛牌 " + listed.slice(5, 16) : "銀行牌價");
+      }
+      var gcf = site.targets.GCF;
+      if (gcf) show("GCF", gcf.latest.close, 2, "");
+    });
+  }
+  function loadLive() {
+    return fetchJson(WORKER_URL + "?ts=" + Date.now()).then(function (data) {
+      var q = data && data.quotes && data.quotes.GCF;
+      if (q) show("GCF", q.close, 2, "約延遲 10 分鐘　" + String(q.quote_time).slice(5));
+    });
+  }
+  loadPublished().then(loadLive);
+  setInterval(function () { loadPublished().then(loadLive); }, 60000);
 })();
 </script>
 </body>

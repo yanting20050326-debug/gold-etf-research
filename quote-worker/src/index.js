@@ -21,6 +21,13 @@ import {
   parseYahooChart,
 } from "./quotes.js";
 import { runNotifyCheck } from "./notify.js";
+import {
+  GEMINI_URL,
+  checkRateLimit,
+  isAllowedOrigin,
+  runConversation,
+  validateChatRequest,
+} from "./assistant.js";
 
 const SITE_DATA_URL =
   "https://yanting20050326-debug.github.io/gold-research-site/data/gold_site.json";
@@ -118,12 +125,90 @@ export async function handleScheduled(event, env) {
   if (summary.sent || summary.failed) console.log("notify check:", JSON.stringify(summary));
 }
 
+// ---- AI 小幫手 /chat ----------------------------------------------------------
+//
+// 需要 secret GEMINI_API_KEY（wrangler secret put GEMINI_API_KEY）；沒設定時回 503
+// not_configured，網頁會顯示「小幫手尚未啟用」，報價端點完全不受影響。
+// 只接受本站網址（見 assistant.js 的 ALLOWED_ORIGINS）發出的請求，並有每人／每日次數上限。
+
+function jsonResponse(body, status, headers) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json; charset=utf-8", ...headers },
+  });
+}
+
+function chatCorsHeaders(origin) {
+  return isAllowedOrigin(origin)
+    ? { "Access-Control-Allow-Origin": origin, Vary: "Origin" }
+    : { Vary: "Origin" };
+}
+
+async function callGemini(apiKey, body) {
+  // 金鑰放在標頭而不是網址，錯誤訊息與日誌才不會把它帶出去。
+  const response = await fetch(GEMINI_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(25000),
+  });
+  if (!response.ok) throw new Error(`gemini HTTP ${response.status}`);
+  return response.json();
+}
+
+export async function handleChat(request, env) {
+  const origin = request.headers.get("Origin");
+  const cors = chatCorsHeaders(origin);
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        ...cors,
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Max-Age": "86400",
+      },
+    });
+  }
+  if (request.method !== "POST") return jsonResponse({ error: "method_not_allowed" }, 405, cors);
+  if (!isAllowedOrigin(origin)) return jsonResponse({ error: "forbidden_origin" }, 403, cors);
+  if (!env.GEMINI_API_KEY) return jsonResponse({ error: "not_configured" }, 503, cors);
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ error: "bad_request" }, 400, cors);
+  }
+  const checked = validateChatRequest(body);
+  if (!checked.ok) return jsonResponse({ error: checked.error }, 400, cors);
+
+  const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+  const limit = await checkRateLimit(env.NOTIFY_STATE, ip);
+  if (!limit.ok) return jsonResponse({ error: limit.error }, 429, cors);
+
+  try {
+    const site = await fetchSiteData();
+    const reply = await runConversation({
+      messages: checked.messages,
+      site,
+      focusCode: checked.code,
+      callModel: (modelBody) => callGemini(env.GEMINI_API_KEY, modelBody),
+    });
+    return jsonResponse({ reply }, 200, cors);
+  } catch (error) {
+    console.error("chat failed:", String(error?.message ?? error));
+    return jsonResponse({ error: "upstream_error" }, 502, cors);
+  }
+}
+
 export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil(handleScheduled(event, env));
   },
 
   async fetch(request, env, ctx) {
+    if (new URL(request.url).pathname === "/chat") return handleChat(request, env);
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
