@@ -51,11 +51,100 @@ async function fetchJson(url) {
   return response.json();
 }
 
-async function fetchTwse(now) {
+// ---- TWSE：重試 + 失敗時沿用上一筆好價 ----------------------------------------
+//
+// TWSE 前面的 CDN 偶爾會對 Cloudflare 機房出去的請求回 520/502（實測約半小時內零星出現）。
+// 單次失敗就放棄的話，ETF 即時價會直接消失；所以先重試，還是失敗就用上一次成功的報價
+// （保留原本的成交時間，網頁會顯示那個時間，不會假裝是剛抓到的）。只沿用「同一天、2 小時內」的，
+// 不會把昨天的價格當成今天的。
+
+const TWSE_ATTEMPTS = 3;
+const TWSE_ATTEMPT_TIMEOUT_MS = 4000;
+const TWSE_STALE_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+const TWSE_KV_KEY = "twse:last_good";
+const TWSE_KV_TTL_SECONDS = 2 * 60 * 60;
+const TWSE_KV_WRITE_INTERVAL_MS = 5 * 60 * 1000; // KV 免費額度每天只有 1,000 次寫入，所以最多每 5 分鐘寫一次
+const TWSE_HEADERS = {
+  "User-Agent": "Mozilla/5.0",
+  Accept: "application/json, text/javascript, */*; q=0.01",
+  "Accept-Language": "zh-TW,zh;q=0.9",
+  Referer: "https://mis.twse.com.tw/stock/index.jsp",
+};
+
+let lastGoodTwse = null; // { savedAt, date, quotes }：同一個 isolate 內的快取
+let lastKvWriteAt = 0;
+
+export function resetTwseMemory() {
+  lastGoodTwse = null;
+  lastKvWriteAt = 0;
+}
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function fetchTwseOnce(url) {
+  const response = await fetch(url, {
+    headers: TWSE_HEADERS,
+    signal: AbortSignal.timeout(TWSE_ATTEMPT_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}
+
+async function fetchTwseWithRetry(url, sleep) {
+  let lastError;
+  for (let attempt = 1; attempt <= TWSE_ATTEMPTS; attempt++) {
+    try {
+      const quotes = parseTwsePayload(await fetchTwseOnce(url));
+      if (Object.keys(quotes).length > 0) return quotes;
+      lastError = new Error("TWSE returned no usable quotes");
+    } catch (error) {
+      lastError = error;
+    }
+    if (attempt < TWSE_ATTEMPTS) await sleep(300 * attempt);
+  }
+  throw lastError;
+}
+
+async function rememberTwse(quotes, now, kv) {
+  lastGoodTwse = { savedAt: now.getTime(), date: formatTaipeiDate(now), quotes };
+  if (!kv || now.getTime() - lastKvWriteAt < TWSE_KV_WRITE_INTERVAL_MS) return;
+  lastKvWriteAt = now.getTime();
+  try {
+    await kv.put(TWSE_KV_KEY, JSON.stringify(lastGoodTwse), { expirationTtl: TWSE_KV_TTL_SECONDS });
+  } catch (error) {
+    console.error("TWSE last-good save failed:", String(error));
+  }
+}
+
+async function recallTwse(now, kv) {
+  let best = lastGoodTwse;
+  if (kv) {
+    try {
+      const stored = await kv.get(TWSE_KV_KEY, "json");
+      if (stored && (!best || stored.savedAt > best.savedAt)) best = stored;
+    } catch (error) {
+      console.error("TWSE last-good read failed:", String(error));
+    }
+  }
+  if (!best || best.date !== formatTaipeiDate(now)) return null;
+  if (now.getTime() - best.savedAt > TWSE_STALE_MAX_AGE_MS) return null;
+  return best.quotes;
+}
+
+async function fetchTwse(now, { kv, sleep = delay } = {}) {
   if (!isTwseSession(now)) return {};
   const exCh = TWSE_CODES.map((code) => `tse_${code}.tw`).join("|");
   const url = `${TWSE_URL}?ex_ch=${encodeURIComponent(exCh)}&json=1&delay=0`;
-  return parseTwsePayload(await fetchJson(url));
+  try {
+    const quotes = await fetchTwseWithRetry(url, sleep);
+    await rememberTwse(quotes, now, kv);
+    return quotes;
+  } catch (error) {
+    const stale = await recallTwse(now, kv);
+    if (!stale) throw error;
+    console.error("TWSE failed, serving last good quotes:", String(error));
+    return stale;
+  }
 }
 
 async function fetchIntlGold() {
@@ -63,8 +152,8 @@ async function fetchIntlGold() {
 }
 
 // 各來源獨立失敗：TWSE 掛了不影響國際金價，反之亦然。
-export async function loadPayload(now = new Date()) {
-  const [twse, gold] = await Promise.allSettled([fetchTwse(now), fetchIntlGold()]);
+export async function loadPayload(now = new Date(), options = {}) {
+  const [twse, gold] = await Promise.allSettled([fetchTwse(now, options), fetchIntlGold()]);
   if (twse.status === "rejected") console.error("TWSE failed:", String(twse.reason));
   if (gold.status === "rejected") console.error("Yahoo failed:", String(gold.reason));
   return buildPayload(
@@ -114,7 +203,7 @@ export async function handleScheduled(event, env) {
   // 台股盤中每分鐘檢查；其餘時間（只有國際金價在動）每 5 分鐘檢查一次就夠。
   if (!isTwseSession(now) && now.getUTCMinutes() % 5 !== 0) return;
 
-  const [payload, site] = await Promise.all([loadPayload(now), fetchSiteData()]);
+  const [payload, site] = await Promise.all([loadPayload(now, { kv: env.NOTIFY_STATE }), fetchSiteData()]);
   const summary = await runNotifyCheck({
     today: formatTaipeiDate(now),
     quotes: payload.quotes,
@@ -223,7 +312,7 @@ export default {
     const cached = await cache.match(cacheKey);
     if (cached) return cached;
 
-    const payload = await loadPayload();
+    const payload = await loadPayload(new Date(), { kv: env.NOTIFY_STATE });
     const response = new Response(JSON.stringify(payload), {
       headers: {
         ...CORS_HEADERS,
