@@ -112,7 +112,7 @@
   .verdict.hot { color: var(--brand-dark); }
   .plain { font-size: 12.5px; color: var(--text-soft); line-height: 1.5; }
 
-  .row-b { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+  .row-b { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 14px; margin-top: 14px; }
   .score-big { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
   .score-big .num { font-size: 36px; font-weight: 700; color: var(--brand); line-height: 1.1; }
   .score-big .num small { font-size: 15px; }
@@ -934,10 +934,14 @@ function renderTarget(code) {
   left.appendChild(renderActionCard(target));
   left.appendChild(renderChartCard(target));
   main.appendChild(left);
-  main.appendChild(renderIndicatorSection(target));
+  // 右欄：六個指標 + 綜合冷熱分數。左欄（價格階段卡 + 走勢圖）比六個指標高，
+  // 把分數卡放在指標下面，兩欄高度才接近，不會在右下方留一大塊空白。
+  const right = el("div", { className: "stack" });
+  right.appendChild(renderIndicatorSection(target));
+  right.appendChild(renderTechnicalScore(target));
+  main.appendChild(right);
   view.appendChild(main);
   const rowB = el("div", { className: "row-b" });
-  rowB.appendChild(renderTechnicalScore(target));
   rowB.appendChild(renderAiSummary(target));
   rowB.appendChild(renderMacroCard());
   view.appendChild(rowB);
